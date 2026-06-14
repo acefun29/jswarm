@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jswarm Showcase · 智能客服</title>
+<link rel="stylesheet" href="/web/showcase/showcase.css">
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(function(regs) {
+    regs.forEach(function(reg) { reg.unregister(); });
+  });
+}
+</script>
+</head>
+<body>
+<header>
+  <div class="header-left">
+    <div class="brand">Jswarm Showcase</div>
+    <div class="subtitle">全能力智能客服 · 编排可视化</div>
+  </div>
+  <div class="header-meta">
+    <span class="status-dot" title="服务在线"></span>
+    <span id="user-badge">张三 · 黄金VIP</span>
+    <span id="agent-tag" title="当前接管 Agent">router · 路由专员</span>
+  </div>
+</header>
+
+<nav class="mobile-tabs" id="mobile-tabs">
+  <button class="tab active" data-panel="chat">对话</button>
+  <button class="tab" data-panel="sidebar">场景</button>
+  <button class="tab" data-panel="trace">轨迹</button>
+</nav>
+
+<div class="layout">
+  <aside class="sidebar panel" data-panel="sidebar">
+    <section class="card">
+      <h3>用户身份</h3>
+      <p class="hint">切换用户将重置会话并注入不同 SwarmContext</p>
+      <label class="radio-card">
+        <input type="radio" name="user" value="u001" checked>
+        <span><strong>张三</strong><small>黄金VIP · 消费 15800 元</small></span>
+      </label>
+      <label class="radio-card">
+        <input type="radio" name="user" value="u002">
+        <span><strong>李四</strong><small>普通用户 · 消费 300 元</small></span>
+      </label>
+    </section>
+
+    <section class="card">
+      <h3>快捷场景</h3>
+      <p class="hint">预填典型问题，便于触发 handoff / delegate</p>
+      <button class="scene-btn" data-msg="我的激活码一直提示无效，请帮我排查" data-send="true">
+        <span class="btn-title">技术故障</span>
+        <span class="btn-desc">handoff → tech · 点击预填并发送</span>
+      </button>
+      <button class="scene-btn" data-msg="帮我查订单 ORD-10086 物流" data-send="true">
+        <span class="btn-title">查订单</span>
+        <span class="btn-desc">handoff → order · @Tool</span>
+      </button>
+      <button class="scene-btn" data-msg="旗舰版多少钱？有什么优惠？" data-send="true">
+        <span class="btn-title">销售咨询</span>
+        <span class="btn-desc">handoff → sales · 动态 instructions</span>
+      </button>
+      <button class="scene-btn" data-msg="分析一下我的订单消费情况给老板汇报" data-send="true">
+        <span class="btn-title">委派分析</span>
+        <span class="btn-desc">delegate → order / analyst</span>
+      </button>
+    </section>
+
+    <section class="card">
+      <h3>单轮 SwarmRunner</h3>
+      <p class="hint">无会话 history，演示纯 Runner.run()</p>
+      <div class="btn-row">
+        <button class="scenario-btn" data-scenario="tech">技术</button>
+        <button class="scenario-btn" data-scenario="order">订单</button>
+        <button class="scenario-btn" data-scenario="sales">销售</button>
+        <button class="scenario-btn" data-scenario="delegate">委派</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>Agent 拓扑</h3>
+      <p class="hint">entry 为 router；高亮表示当前接管 Agent</p>
+      <div id="topology" class="topology">
+        <div class="topo-node entry" data-agent="router">
+          <span class="topo-id">router</span>
+          <span class="topo-name">路由专员</span>
+        </div>
+        <div class="topo-links">
+          <div class="topo-row">
+            <span class="topo-edge handoff">handoff</span>
+            <div class="topo-node" data-agent="tech"><span class="topo-id">tech</span><span class="topo-name">技术支持</span></div>
+          </div>
+          <div class="topo-row">
+            <span class="topo-edge handoff">handoff</span>
+            <div class="topo-node" data-agent="sales"><span class="topo-id">sales</span><span class="topo-name">销售专员</span></div>
+          </div>
+          <div class="topo-row">
+            <span class="topo-edge handoff">handoff</span>
+            <div class="topo-node" data-agent="order"><span class="topo-id">order</span><span class="topo-name">订单专员</span></div>
+          </div>
+          <div class="topo-row delegate">
+            <span class="topo-edge delegate">delegate</span>
+            <div class="topo-node" data-agent="analyst"><span class="topo-id">analyst</span><span class="topo-name">数据分析师</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>框架能力</h3>
+      <ul id="feature-list" class="feature-tags"></ul>
+    </section>
+
+    <button id="reset-btn" class="secondary">重置会话</button>
+  </aside>
+
+  <main class="chat-panel panel active" data-panel="chat">
+    <div id="msg-area">
+      <div class="msg system welcome">
+        欢迎使用 Jswarm Showcase。左侧选用户与场景，右侧实时查看 handoff / delegate / 钩子与 Context。
+      </div>
+    </div>
+    <div class="input-area">
+      <input id="user-input" type="text" placeholder="输入消息，Enter 发送..." autofocus>
+      <button id="send-btn">发送</button>
+    </div>
+  </main>
+
+  <aside class="trace-panel panel" data-panel="trace">
+    <section class="card fill">
+      <div class="section-head">
+        <h3>编排时间线</h3>
+        <button id="clear-timeline" class="text-btn" title="清空时间线">清空</button>
+      </div>
+      <div id="timeline">
+        <div class="empty-state" id="timeline-empty">暂无编排事件，发送消息后将展示 onEnter / handoff / delegate / tool 等轨迹</div>
+      </div>
+    </section>
+    <section class="card">
+      <h3>SwarmContext 快照</h3>
+      <p class="hint">当前请求线程内 {key} 值（resolve 前注入）</p>
+      <div id="context-table"></div>
+    </section>
+  </aside>
+</div>
+
+<script src="/web/showcase/showcase.js"></script>
+</body>
+</html>
