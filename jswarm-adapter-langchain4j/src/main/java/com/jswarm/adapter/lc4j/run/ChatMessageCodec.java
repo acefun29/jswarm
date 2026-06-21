@@ -3,6 +3,7 @@ package com.jswarm.adapter.lc4j.run;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jswarm.core.SwarmException;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
@@ -62,7 +63,7 @@ public final class ChatMessageCodec {
         try {
             return MAPPER.writeValueAsString(rows);
         } catch (Exception e) {
-            return "[]";
+            throw new SwarmException("Failed to encode chat messages", e);
         }
     }
 
@@ -91,7 +92,7 @@ public final class ChatMessageCodec {
             }
             return history;
         } catch (Exception e) {
-            return new ArrayList<>();
+            throw new SwarmException("Failed to decode chat messages", e);
         }
     }
 }
