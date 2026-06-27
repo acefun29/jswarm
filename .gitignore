@@ -31,9 +31,11 @@ data/
 *.db-wal
 *.db-shm
 
-# 私有文档与协作规则（不公开）
 AGENTS.md
 doc/
+
+compliance-swarm/
+jswarm-smart-oa/
 
 *.md
 
@@ -49,3 +51,4 @@ doc/
 *.key
 !README.md
 !README_EN.md
+.arts
