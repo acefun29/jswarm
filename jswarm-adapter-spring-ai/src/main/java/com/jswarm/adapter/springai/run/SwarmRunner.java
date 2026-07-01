@@ -5,6 +5,7 @@ import com.jswarm.adapter.springai.JAgent;
 import com.jswarm.adapter.springai.ToolProvider;
 import com.jswarm.adapter.springai.filter.FilterDecision;
 import com.jswarm.adapter.springai.filter.SwarmFilter;
+import com.jswarm.adapter.springai.invoke.AdvisorChatInvoker;
 import com.jswarm.adapter.springai.invoke.ChatInvoker;
 import com.jswarm.adapter.springai.invoke.StreamingChatInvoker;
 import com.jswarm.adapter.springai.tool.SwarmToolInjector;
@@ -182,7 +183,13 @@ public final class SwarmRunner {
                         .build();
                 Prompt prompt = new Prompt(messages, chatOptions);
 
-                ChatResponse chatResponse = ChatInvoker.invoke(runtimeAgent, prompt, options.modelTimeout());
+                ChatResponse chatResponse;
+                if (options.advisors() != null && !options.advisors().isEmpty()) {
+                    chatResponse = AdvisorChatInvoker.invoke(runtimeAgent, prompt,
+                            options.modelTimeout(), options.advisors());
+                } else {
+                    chatResponse = ChatInvoker.invoke(runtimeAgent, prompt, options.modelTimeout());
+                }
 
                 if (chatResponse == null || chatResponse.getResult() == null) {
                     throw new SwarmException("LLM returned empty response");
@@ -286,9 +293,19 @@ public final class SwarmRunner {
                 } catch (RuntimeException e) {
                     ensureCanRecover(recoveryAttempts);
                     recoveryAttempts++;
-                    result = "Jswarm recovery: tool '" + toolCall.name()
-                            + "' failed. Please answer directly or try another available tool. Error: "
-                            + e.getMessage();
+                    if (options.exceptionProcessor() != null) {
+                        result = options.exceptionProcessor().process(
+                                new org.springframework.ai.tool.execution.ToolExecutionException(
+                                        org.springframework.ai.tool.definition.ToolDefinition.builder()
+                                                .name(toolCall.name())
+                                                .inputSchema(toolCall.arguments())
+                                                .build(),
+                                        e));
+                    } else {
+                        result = "Jswarm recovery: tool '" + toolCall.name()
+                                + "' failed. Please answer directly or try another available tool. Error: "
+                                + e.getMessage();
+                    }
                     fireOnRecovery(currentAgentId,
                             "Tool '" + toolCall.name() + "' failed: " + e.getMessage());
                 }
@@ -379,8 +396,14 @@ public final class SwarmRunner {
                         .build();
                 Prompt prompt = new Prompt(messages, chatOptions);
 
-                AssistantMessage aiMsg = StreamingChatInvoker.stream(
-                        runtimeAgent, prompt, options.modelTimeout(), sink);
+                AssistantMessage aiMsg;
+                if (options.advisors() != null && !options.advisors().isEmpty()) {
+                    aiMsg = AdvisorChatInvoker.stream(
+                            runtimeAgent, prompt, options.modelTimeout(), options.advisors(), sink);
+                } else {
+                    aiMsg = StreamingChatInvoker.stream(
+                            runtimeAgent, prompt, options.modelTimeout(), sink);
+                }
 
                 if (!aiMsg.hasToolCalls()) {
                     messages.add(aiMsg);
@@ -482,9 +505,19 @@ public final class SwarmRunner {
                 } catch (RuntimeException e) {
                     ensureCanRecover(recoveryAttempts);
                     recoveryAttempts++;
-                    result = "Jswarm recovery: tool '" + toolCall.name()
-                            + "' failed. Please answer directly or try another available tool. Error: "
-                            + e.getMessage();
+                    if (options.exceptionProcessor() != null) {
+                        result = options.exceptionProcessor().process(
+                                new org.springframework.ai.tool.execution.ToolExecutionException(
+                                        org.springframework.ai.tool.definition.ToolDefinition.builder()
+                                                .name(toolCall.name())
+                                                .inputSchema(toolCall.arguments())
+                                                .build(),
+                                        e));
+                    } else {
+                        result = "Jswarm recovery: tool '" + toolCall.name()
+                                + "' failed. Please answer directly or try another available tool. Error: "
+                                + e.getMessage();
+                    }
                     sink.accept(new SwarmEvent.RecoveryTriggered(currentAgentId,
                             "Tool '" + toolCall.name() + "' failed: " + e.getMessage()));
                 }

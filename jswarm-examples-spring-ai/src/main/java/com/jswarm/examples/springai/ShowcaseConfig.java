@@ -2,7 +2,6 @@
 package com.jswarm.examples.springai;
 
 import com.jswarm.adapter.springai.JAgent;
-import com.jswarm.adapter.springai.run.SwarmRunner;
 import com.jswarm.core.Swarm;
 import com.openai.client.OpenAIClient;
 import com.openai.client.OpenAIClientImpl;
@@ -77,10 +76,5 @@ public class ShowcaseConfig {
                 .handoff("sales", "tech")
                 .handoff("tech", "sales")
                 .build();
-    }
-
-    @Bean
-    public SwarmRunner swarmRunner(Swarm swarm) {
-        return SwarmRunner.create(swarm);
     }
 }

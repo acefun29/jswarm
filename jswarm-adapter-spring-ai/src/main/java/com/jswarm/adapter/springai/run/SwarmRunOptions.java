@@ -1,6 +1,9 @@
 package com.jswarm.adapter.springai.run;
 
 import java.time.Duration;
+import java.util.List;
+import org.springframework.ai.chat.client.advisor.api.Advisor;
+import org.springframework.ai.tool.execution.ToolExecutionExceptionProcessor;
 
 public record SwarmRunOptions(
         int maxTurns,
@@ -8,10 +11,12 @@ public record SwarmRunOptions(
         int maxDelegateDepth,
         Duration modelTimeout,
         boolean delegateStreaming,
-        SwarmRunListener listener) {
+        SwarmRunListener listener,
+        List<Advisor> advisors,
+        ToolExecutionExceptionProcessor exceptionProcessor) {
 
     public static SwarmRunOptions defaults() {
-        return new SwarmRunOptions(10, 2, 3, null, true, null);
+        return new SwarmRunOptions(10, 2, 3, null, true, null, null, null);
     }
 
     public static Builder builder() {
@@ -25,6 +30,8 @@ public record SwarmRunOptions(
         private Duration modelTimeout;
         private boolean delegateStreaming = true;
         private SwarmRunListener listener;
+        private List<Advisor> advisors;
+        private ToolExecutionExceptionProcessor exceptionProcessor;
 
         public Builder maxTurns(int maxTurns) {
             this.maxTurns = maxTurns;
@@ -56,11 +63,21 @@ public record SwarmRunOptions(
             return this;
         }
 
+        public Builder advisors(List<Advisor> advisors) {
+            this.advisors = advisors;
+            return this;
+        }
+
+        public Builder exceptionProcessor(ToolExecutionExceptionProcessor exceptionProcessor) {
+            this.exceptionProcessor = exceptionProcessor;
+            return this;
+        }
+
         public SwarmRunOptions build() {
             if (maxTurns <= 0) throw new IllegalArgumentException("maxTurns must be positive, got: " + maxTurns);
             if (maxRecoveryAttempts <= 0) throw new IllegalArgumentException("maxRecoveryAttempts must be positive, got: " + maxRecoveryAttempts);
             if (maxDelegateDepth <= 0) throw new IllegalArgumentException("maxDelegateDepth must be positive, got: " + maxDelegateDepth);
-            return new SwarmRunOptions(maxTurns, maxRecoveryAttempts, maxDelegateDepth, modelTimeout, delegateStreaming, listener);
+            return new SwarmRunOptions(maxTurns, maxRecoveryAttempts, maxDelegateDepth, modelTimeout, delegateStreaming, listener, advisors, exceptionProcessor);
         }
     }
 }

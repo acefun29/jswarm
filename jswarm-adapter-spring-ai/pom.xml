@@ -39,5 +39,27 @@
             <artifactId>mockito-core</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <!-- Phase 3: Micrometer (optional, for SwarmMetricsAdvisor) -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-core</artifactId>
+            <version>1.13.6</version>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Phase 3: Spring Boot AutoConfiguration (optional) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+            <version>3.3.5</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-configuration-processor</artifactId>
+            <version>3.3.5</version>
+            <optional>true</optional>
+        </dependency>
     </dependencies>
 </project>

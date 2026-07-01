@@ -11,6 +11,8 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.tool.execution.DefaultToolExecutionExceptionProcessor;
+import org.springframework.ai.tool.execution.ToolExecutionExceptionProcessor;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -126,6 +128,43 @@ class SwarmRecoveryTest {
 
         assertThrows(SwarmException.class, () -> runner.run("hi"));
         assertTrue(exitCalled.get());
+    }
+
+    @Test
+    void shouldUseExceptionProcessorForCustomRecovery() {
+        ChatModel model = sequenceModel(
+                toolMsg("external", "{}"),
+                textMsg("handled"));
+        ExternalToolExecutor failing = req -> { throw new RuntimeException("tool exploded"); };
+        ToolExecutionExceptionProcessor processor = DefaultToolExecutionExceptionProcessor.builder()
+                .alwaysThrow(false)
+                .build();
+
+        Swarm swarm = Swarm.create("s")
+                .agent(agent("main", "hi", model))
+                .entry("main").build();
+        SwarmRunner runner = SwarmRunner.create(swarm,
+                SwarmRunOptions.builder().maxRecoveryAttempts(2).exceptionProcessor(processor).build(), failing);
+
+        String result = runner.run("hi");
+        assertNotNull(result);
+    }
+
+    @Test
+    void shouldUseOriginalRecoveryWhenExceptionProcessorNotConfigured() {
+        ChatModel model = sequenceModel(
+                toolMsg("external", "{}"),
+                textMsg("handled"));
+        ExternalToolExecutor failing = req -> { throw new RuntimeException("tool exploded"); };
+
+        Swarm swarm = Swarm.create("s")
+                .agent(agent("main", "hi", model))
+                .entry("main").build();
+        SwarmRunner runner = SwarmRunner.create(swarm,
+                SwarmRunOptions.builder().maxRecoveryAttempts(2).build(), failing);
+
+        String result = runner.run("hi");
+        assertEquals("handled", result);
     }
 
     private ChatModel sequenceModel(AssistantMessage... msgs) {

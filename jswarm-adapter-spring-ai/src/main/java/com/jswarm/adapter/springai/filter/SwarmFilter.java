@@ -2,6 +2,7 @@ package com.jswarm.adapter.springai.filter;
 
 import com.jswarm.adapter.springai.ExternalToolExecutor;
 import com.jswarm.adapter.springai.JAgent;
+import com.jswarm.adapter.springai.invoke.AdvisorChatInvoker;
 import com.jswarm.adapter.springai.invoke.ChatInvoker;
 import com.jswarm.adapter.springai.invoke.StreamingChatInvoker;
 import com.jswarm.adapter.springai.run.SwarmRunOptions;
@@ -54,21 +55,32 @@ public final class SwarmFilter {
     }
 
     public String executeDelegate(String targetId, String task,
-                                    ExternalToolExecutor swarmFallback,
-                                    SwarmRunOptions options) {
+                                     ExternalToolExecutor swarmFallback,
+                                     SwarmRunOptions options) {
         JAgent target = requireJAgent(swarm.getAgent(targetId));
         return executeDelegateInternal(target, task, swarmFallback, options, null,
-                prompt -> ChatInvoker.invoke(target, prompt, options.modelTimeout())
-                        .getResult().getOutput());
+                prompt -> {
+                    if (options.advisors() != null && !options.advisors().isEmpty()) {
+                        return AdvisorChatInvoker.invoke(target, prompt, options.modelTimeout(), options.advisors())
+                                .getResult().getOutput();
+                    }
+                    return ChatInvoker.invoke(target, prompt, options.modelTimeout())
+                            .getResult().getOutput();
+                });
     }
 
     public String executeDelegateStreaming(String targetId, String task,
-                                             ExternalToolExecutor swarmFallback,
-                                             SwarmRunOptions options,
-                                             Consumer<SwarmEvent> sink) {
+                                              ExternalToolExecutor swarmFallback,
+                                              SwarmRunOptions options,
+                                              Consumer<SwarmEvent> sink) {
         JAgent target = requireJAgent(swarm.getAgent(targetId));
         return executeDelegateInternal(target, task, swarmFallback, options, sink,
-                prompt -> StreamingChatInvoker.stream(target, prompt, options.modelTimeout(), sink));
+                prompt -> {
+                    if (options.advisors() != null && !options.advisors().isEmpty()) {
+                        return AdvisorChatInvoker.stream(target, prompt, options.modelTimeout(), options.advisors(), sink);
+                    }
+                    return StreamingChatInvoker.stream(target, prompt, options.modelTimeout(), sink);
+                });
     }
 
     private String executeDelegateInternal(JAgent target, String task,
@@ -129,8 +141,18 @@ public final class SwarmFilter {
                 try {
                     subResult = subExec.execute(subToolCall);
                 } catch (RuntimeException e) {
-                    subResult = "Jswarm recovery: tool '" + subToolCall.name()
-                            + "' failed. Error: " + e.getMessage();
+                    if (options.exceptionProcessor() != null) {
+                        subResult = options.exceptionProcessor().process(
+                                new org.springframework.ai.tool.execution.ToolExecutionException(
+                                        org.springframework.ai.tool.definition.ToolDefinition.builder()
+                                                .name(subToolCall.name())
+                                                .inputSchema(subToolCall.arguments())
+                                                .build(),
+                                        e));
+                    } else {
+                        subResult = "Jswarm recovery: tool '" + subToolCall.name()
+                                + "' failed. Error: " + e.getMessage();
+                    }
                 }
                 subMessages.add(subAiMsg);
                 subMessages.add(ToolResponseMessage.builder().responses(List.of(
