@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jswarm Spring AI Showcase</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; height: 100vh; display: flex; background: #f5f5f5; }
+.container { display: flex; width: 100%; height: 100vh; }
+.chat-panel { flex: 1; display: flex; flex-direction: column; border-right: 1px solid #ddd; }
+.traj-panel { width: 400px; display: flex; flex-direction: column; background: #fff; }
+.header { padding: 16px 20px; background: #4a90d9; color: #fff; font-weight: bold; }
+.messages { flex: 1; overflow-y: auto; padding: 16px 20px; }
+.msg { margin: 8px 0; padding: 10px 14px; border-radius: 8px; max-width: 80%; word-break: break-word; }
+.msg.user { background: #e3f2fd; align-self: flex-end; margin-left: auto; }
+.msg.assistant { background: #fff; border: 1px solid #e0e0e0; }
+.msg.system { background: #fff3e0; font-style: italic; color: #666; text-align: center; max-width: 100%; }
+.input-bar { display: flex; padding: 12px 16px; border-top: 1px solid #ddd; gap: 8px; }
+.input-bar input { flex: 1; padding: 10px 14px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+.input-bar button { padding: 10px 24px; background: #4a90d9; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+.input-bar button:disabled { opacity: 0.5; cursor: not-allowed; }
+.events { flex: 1; overflow-y: auto; padding: 12px 16px; font-size: 13px; font-family: 'SF Mono', Consolas, monospace; }
+.evt { padding: 4px 8px; margin: 2px 0; border-radius: 4px; }
+.evt.run_started { background: #e8f5e9; }
+.evt.agent_enter { background: #e3f2fd; }
+.evt.agent_exit { background: #fce4ec; }
+.evt.token { color: #333; padding-left: 16px; }
+.evt.tool_call { background: #f3e5f5; }
+.evt.tool_result { background: #fff8e1; }
+.evt.handoff { background: #fff3e0; font-weight: bold; }
+.evt.delegate_start { background: #e0f7fa; }
+.evt.delegate_end { background: #e0f2f1; }
+.evt.recovery { background: #ffebee; }
+.evt.run_complete { background: #c8e6c9; font-weight: bold; }
+.evt.run_failed { background: #ffcdd2; font-weight: bold; }
+.traj-header { padding: 12px 16px; background: #fafafa; border-bottom: 1px solid #eee; font-weight: bold; color: #555; }
+</style>
+</head>
+<body>
+<div class="container">
+<div class="chat-panel">
+<div class="header">Jswarm Spring AI Showcase — 智能客服</div>
+<div class="messages" id="messages"></div>
+<div class="input-bar">
+<input id="input" placeholder="输入消息..." onkeydown="if(event.key==='Enter') send()"/>
+<button id="sendBtn" onclick="send()">发送</button>
+</div>
+</div>
+<div class="traj-panel">
+<div class="traj-header">编排轨迹</div>
+<div class="events" id="events"></div>
+</div>
+</div>
+
+<script>
+const messagesEl = document.getElementById('messages');
+const eventsEl = document.getElementById('events');
+const input = document.getElementById('input');
+const sendBtn = document.getElementById('sendBtn');
+
+let sessionId = 'session_' + Date.now();
+
+function addMessage(text, role) {
+const div = document.createElement('div');
+div.className = 'msg ' + role;
+div.textContent = text;
+messagesEl.appendChild(div);
+messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function addEvent(evt) {
+const div = document.createElement('div');
+const type = evt.type || 'token';
+div.className = 'evt ' + type;
+div.textContent = JSON.stringify(evt.data || evt);
+eventsEl.appendChild(div);
+eventsEl.scrollTop = eventsEl.scrollHeight;
+}
+
+function send() {
+const text = input.value.trim();
+if (!text) return;
+input.value = '';
+addMessage(text, 'user');
+sendBtn.disabled = true;
+
+const eventSource = new EventSource('/api/chat/stream?message=' + encodeURIComponent(text) + '&sessionId=' + sessionId);
+let reply = '';
+
+eventSource.addEventListener('run_started', e => addEvent({ type: 'run_started', data: JSON.parse(e.data) }));
+eventSource.addEventListener('agent_enter', e => addEvent({ type: 'agent_enter', data: JSON.parse(e.data) }));
+eventSource.addEventListener('agent_exit', e => addEvent({ type: 'agent_exit', data: JSON.parse(e.data) }));
+eventSource.addEventListener('token', e => {
+const data = JSON.parse(e.data);
+addEvent({ type: 'token', data });
+if (data.text) reply += data.text;
+});
+eventSource.addEventListener('tool_call', e => addEvent({ type: 'tool_call', data: JSON.parse(e.data) }));
+eventSource.addEventListener('tool_result', e => addEvent({ type: 'tool_result', data: JSON.parse(e.data) }));
+eventSource.addEventListener('handoff', e => addEvent({ type: 'handoff', data: JSON.parse(e.data) }));
+eventSource.addEventListener('delegate_start', e => addEvent({ type: 'delegate_start', data: JSON.parse(e.data) }));
+eventSource.addEventListener('delegate_end', e => addEvent({ type: 'delegate_end', data: JSON.parse(e.data) }));
+eventSource.addEventListener('recovery', e => addEvent({ type: 'recovery', data: JSON.parse(e.data) }));
+eventSource.addEventListener('run_complete', e => {
+addEvent({ type: 'run_complete', data: JSON.parse(e.data) });
+if (reply) addMessage(reply, 'assistant');
+eventSource.close();
+sendBtn.disabled = false;
+});
+eventSource.addEventListener('run_failed', e => {
+addEvent({ type: 'run_failed', data: JSON.parse(e.data) });
+addMessage('请求失败，请重试', 'system');
+eventSource.close();
+sendBtn.disabled = false;
+});
+eventSource.onerror = function() {
+if (eventSource.readyState === EventSource.CLOSED) return;
+if (reply) addMessage(reply, 'assistant');
+eventSource.close();
+sendBtn.disabled = false;
+};
+}
+</script>
+</body>
+</html>

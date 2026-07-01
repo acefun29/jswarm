@@ -29,6 +29,7 @@
         <module>jswarm-adapter-langchain4j</module>
         <module>jswarm-adapter-spring-ai</module>
         <module>jswarm-examples</module>
+        <module>jswarm-examples-spring-ai</module>
     </modules>
 
     <dependencyManagement>

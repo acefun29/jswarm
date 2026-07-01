@@ -3,11 +3,13 @@ package com.jswarm.adapter.springai.filter;
 import com.jswarm.adapter.springai.ExternalToolExecutor;
 import com.jswarm.adapter.springai.JAgent;
 import com.jswarm.adapter.springai.invoke.ChatInvoker;
+import com.jswarm.adapter.springai.invoke.StreamingChatInvoker;
 import com.jswarm.adapter.springai.run.SwarmRunOptions;
 import com.jswarm.adapter.springai.tool.SwarmToolInjector;
 import com.jswarm.adapter.springai.tool.ToolExecutionMerger;
 import com.jswarm.core.Swarm;
 import com.jswarm.core.SwarmContext;
+import com.jswarm.core.SwarmEvent;
 import com.jswarm.core.SwarmException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -16,13 +18,14 @@ import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
-import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 public final class SwarmFilter {
 
@@ -51,72 +54,97 @@ public final class SwarmFilter {
     }
 
     public String executeDelegate(String targetId, String task,
-                                   ExternalToolExecutor swarmFallback,
-                                   SwarmRunOptions options) {
+                                    ExternalToolExecutor swarmFallback,
+                                    SwarmRunOptions options) {
         JAgent target = requireJAgent(swarm.getAgent(targetId));
+        return executeDelegateInternal(target, task, swarmFallback, options, null,
+                prompt -> ChatInvoker.invoke(target, prompt, options.modelTimeout())
+                        .getResult().getOutput());
+    }
+
+    public String executeDelegateStreaming(String targetId, String task,
+                                             ExternalToolExecutor swarmFallback,
+                                             SwarmRunOptions options,
+                                             Consumer<SwarmEvent> sink) {
+        JAgent target = requireJAgent(swarm.getAgent(targetId));
+        return executeDelegateInternal(target, task, swarmFallback, options, sink,
+                prompt -> StreamingChatInvoker.stream(target, prompt, options.modelTimeout(), sink));
+    }
+
+    private String executeDelegateInternal(JAgent target, String task,
+                                            ExternalToolExecutor swarmFallback,
+                                            SwarmRunOptions options,
+                                            Consumer<SwarmEvent> sink,
+                                            Function<Prompt, AssistantMessage> llmCall) {
         SwarmContext ctx = SwarmContext.current();
 
         List<Message> subMessages = new ArrayList<>();
-        target.onDelegateEnter(ctx, task);
-        String delegateInstructions = target.instructions();
-        if (delegateInstructions == null || delegateInstructions.isBlank()) {
-            throw new SwarmException("Agent '" + targetId
-                    + "' has no instructions configured");
-        }
-        subMessages.add(new SystemMessage(ctx.resolve(delegateInstructions)));
-        subMessages.add(new UserMessage(task));
-
-        List<ToolCallback> subTools = SwarmToolInjector.generateExternalToolsOnly(target.externalTools());
-        ExternalToolExecutor subExec = ToolExecutionMerger.merge(target.toolExecutor(), swarmFallback);
-
-        for (int turn = 0; turn < options.maxTurns(); turn++) {
-            ToolCallingChatOptions chatOptions = ToolCallingChatOptions.builder()
-                    .toolCallbacks(subTools)
-                    .build();
-            Prompt subPrompt = new Prompt(subMessages, chatOptions);
-            ChatResponse subResponse = ChatInvoker.invoke(target, subPrompt, options.modelTimeout());
-            AssistantMessage subAiMsg = subResponse.getResult().getOutput();
-
-            if (!subResponse.hasToolCalls()) {
-                String result = subAiMsg.getText();
-                target.onDelegateExit(ctx, task, result);
-                return result;
+        try {
+            target.onDelegateEnter(ctx, task);
+            String delegateInstructions = target.instructions();
+            if (delegateInstructions == null || delegateInstructions.isBlank()) {
+                throw new SwarmException("Agent '" + target.id()
+                        + "' has no instructions configured");
             }
+            subMessages.add(new SystemMessage(ctx.resolve(delegateInstructions)));
+            subMessages.add(new UserMessage(task));
 
-            AssistantMessage.ToolCall subToolCall = subAiMsg.getToolCalls().get(0);
+            List<ToolCallback> subTools = SwarmToolInjector.generateExternalToolsOnly(target.externalTools());
+            ExternalToolExecutor subExec = ToolExecutionMerger.merge(target.toolExecutor(), swarmFallback);
 
-            if (turn == options.maxTurns() - 1) {
-                String warning = "Jswarm: maximum turns (" + options.maxTurns()
-                        + ") exceeded. Please summarize what you have gathered so far.";
-                subMessages.add(subAiMsg);
-                subMessages.add(ToolResponseMessage.builder().responses(List.of(
-                        new ToolResponseMessage.ToolResponse(subToolCall.id(), subToolCall.name(), warning))).build());
-                ToolCallingChatOptions finalOptions = ToolCallingChatOptions.builder()
+            for (int turn = 0; turn < options.maxTurns(); turn++) {
+                ToolCallingChatOptions chatOptions = ToolCallingChatOptions.builder()
                         .toolCallbacks(subTools)
                         .build();
-                Prompt finalPrompt = new Prompt(subMessages, finalOptions);
-                ChatResponse finalResponse = ChatInvoker.invoke(target, finalPrompt, options.modelTimeout());
-                AssistantMessage finalMsg = finalResponse.getResult().getOutput();
-                subMessages.add(finalMsg);
-                String result = finalMsg.hasToolCalls()
-                        ? "Jswarm: delegate max turns exceeded."
-                        : finalMsg.getText();
-                target.onDelegateExit(ctx, task, result);
-                return result;
-            }
+                Prompt subPrompt = new Prompt(subMessages, chatOptions);
+                AssistantMessage subAiMsg = llmCall.apply(subPrompt);
 
-            String subResult;
-            try {
-                subResult = subExec.execute(subToolCall);
-            } catch (RuntimeException e) {
-                subResult = "Jswarm recovery: tool '" + subToolCall.name()
-                        + "' failed. Error: " + e.getMessage();
+                if (!subAiMsg.hasToolCalls()) {
+                    String result = subAiMsg.getText();
+                    target.onDelegateExit(ctx, task, result);
+                    return result;
+                }
+
+                AssistantMessage.ToolCall subToolCall = subAiMsg.getToolCalls().get(0);
+
+                if (turn == options.maxTurns() - 1) {
+                    String warning = "Jswarm: maximum turns (" + options.maxTurns()
+                            + ") exceeded. Please summarize what you have gathered so far.";
+                    subMessages.add(subAiMsg);
+                    subMessages.add(ToolResponseMessage.builder().responses(List.of(
+                            new ToolResponseMessage.ToolResponse(subToolCall.id(), subToolCall.name(), warning))).build());
+                    ToolCallingChatOptions finalOptions = ToolCallingChatOptions.builder()
+                            .toolCallbacks(subTools)
+                            .build();
+                    Prompt finalPrompt = new Prompt(subMessages, finalOptions);
+                    AssistantMessage finalMsg = llmCall.apply(finalPrompt);
+                    String result = finalMsg.hasToolCalls()
+                            ? "Jswarm: delegate max turns exceeded."
+                            : finalMsg.getText();
+                    target.onDelegateExit(ctx, task, result);
+                    return result;
+                }
+
+                String subResult;
+                try {
+                    subResult = subExec.execute(subToolCall);
+                } catch (RuntimeException e) {
+                    subResult = "Jswarm recovery: tool '" + subToolCall.name()
+                            + "' failed. Error: " + e.getMessage();
+                }
+                subMessages.add(subAiMsg);
+                subMessages.add(ToolResponseMessage.builder().responses(List.of(
+                        new ToolResponseMessage.ToolResponse(subToolCall.id(), subToolCall.name(), subResult))).build());
             }
-            subMessages.add(subAiMsg);
-            subMessages.add(ToolResponseMessage.builder().responses(List.of(
-                    new ToolResponseMessage.ToolResponse(subToolCall.id(), subToolCall.name(), subResult))).build());
+            throw new SwarmException("Delegate max turns exceeded");
+        } catch (RuntimeException e) {
+            try {
+                target.onDelegateExit(ctx, task, null);
+            } catch (RuntimeException hookEx) {
+                e.addSuppressed(hookEx);
+            }
+            throw e;
         }
-        throw new SwarmException("Delegate max turns exceeded");
     }
 
     private void validateTargetExists(String targetId) {
@@ -129,19 +157,20 @@ public final class SwarmFilter {
         if (arguments == null || arguments.isBlank()) {
             throw new SwarmException("Tool call arguments are empty");
         }
+        JsonNode node;
         try {
-            JsonNode node = MAPPER.readTree(arguments);
-            JsonNode field = node.get(key);
-            if (field == null) {
-                throw new SwarmException("No '" + key + "' field found in tool call arguments");
-            }
-            if (!field.isTextual()) {
-                throw new SwarmException("Field '" + key + "' must be a string, got: " + field.getNodeType());
-            }
-            return field.textValue();
+            node = MAPPER.readTree(arguments);
         } catch (Exception e) {
             throw new SwarmException("Failed to parse tool call arguments: " + e.getMessage(), e);
         }
+        JsonNode field = node.get(key);
+        if (field == null) {
+            throw new SwarmException("No '" + key + "' field found in tool call arguments");
+        }
+        if (!field.isTextual()) {
+            throw new SwarmException("Field '" + key + "' must be a string, got: " + field.getNodeType());
+        }
+        return field.textValue();
     }
 
     private JAgent requireJAgent(com.jswarm.core.Agent agent) {
