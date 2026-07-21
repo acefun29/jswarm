@@ -263,6 +263,7 @@ class SwarmLifecycleTest {
             @Override
             public ChatResponse chat(ChatRequest req) {
                 ToolExecutionRequest toolCall = ToolExecutionRequest.builder()
+                        .id("call-1")
                         .name("handoff")
                         .arguments("{\"target\": \"" + target + "\"}")
                         .build();
@@ -298,8 +299,12 @@ class SwarmLifecycleTest {
         };
     }
 
+    private static int toolCallSeq;
+
     private static AiMessage toolMsg(String name, String args) {
-        return AiMessage.from(ToolExecutionRequest.builder().name(name).arguments(args).build());
+        return AiMessage.from(ToolExecutionRequest.builder()
+                .id("call-" + (++toolCallSeq))
+                .name(name).arguments(args).build());
     }
 
     static class LoopTools {

@@ -92,14 +92,16 @@ class SwarmRecoveryTest {
 
     @Test
     void shouldThrowWhenRecoveryExceeded() {
-        ChatModel model = sequenceModel(
-                toolMsg("handoff", "bad"),
-                toolMsg("handoff", "also-bad"),
+        ChatModel mainModel = sequenceModel(
+                toolMsg("delegate", "{\"target\":\"sub\",\"task\":\"do it\"}"),
+                toolMsg("delegate", "{\"target\":\"sub\",\"task\":\"do it again\"}"),
                 textMsg("never"));
+        ChatModel subModel = prompt -> { throw new SwarmException("sub fail"); };
 
         Swarm swarm = Swarm.create("s")
-                .agent(agent("main", "hi", model))
-                .entry("main").build();
+                .agent(agent("main", "hi", mainModel))
+                .agent(agent("sub", "hi", subModel))
+                .entry("main").delegate("main", "sub").build();
         SwarmRunner runner = SwarmRunner.create(swarm,
                 SwarmRunOptions.builder().maxRecoveryAttempts(1).build());
 
@@ -110,19 +112,25 @@ class SwarmRecoveryTest {
     @Test
     void shouldTriggerOnExitWhenRecoveryExceeded() {
         AtomicBoolean exitCalled = new AtomicBoolean();
-        ChatModel model = sequenceModel(
-                toolMsg("handoff", "bad"),
-                toolMsg("handoff", "also-bad"),
+        ChatModel mainModel = sequenceModel(
+                toolMsg("delegate", "{\"target\":\"sub\",\"task\":\"do it\"}"),
+                toolMsg("delegate", "{\"target\":\"sub\",\"task\":\"do it again\"}"),
                 textMsg("never"));
+        ChatModel subModel = prompt -> { throw new SwarmException("sub fail"); };
 
-        JAgent a = JAgent.builder("main", "agent-main")
+        JAgent main = JAgent.builder("main", "agent-main")
                 .description("agent main")
                 .instructions("hi")
-                .model(model)
+                .model(mainModel)
                 .onExit(ctx -> exitCalled.set(true))
                 .build();
 
-        Swarm swarm = Swarm.create("s").agent(a).entry("main").build();
+        Swarm swarm = Swarm.create("s")
+                .agent(main)
+                .agent(agent("sub", "hi", subModel))
+                .entry("main")
+                .delegate("main", "sub")
+                .build();
         SwarmRunner runner = SwarmRunner.create(swarm,
                 SwarmRunOptions.builder().maxRecoveryAttempts(1).build());
 

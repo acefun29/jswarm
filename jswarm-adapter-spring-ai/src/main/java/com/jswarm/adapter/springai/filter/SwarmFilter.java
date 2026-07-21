@@ -8,6 +8,9 @@ import com.jswarm.adapter.springai.invoke.StreamingChatInvoker;
 import com.jswarm.adapter.springai.run.SwarmRunOptions;
 import com.jswarm.adapter.springai.tool.SwarmToolInjector;
 import com.jswarm.adapter.springai.tool.ToolExecutionMerger;
+import com.jswarm.core.ProtocolLimits;
+import com.jswarm.core.RouteAuthorization;
+import com.jswarm.core.RouteDeniedException;
 import com.jswarm.core.Swarm;
 import com.jswarm.core.SwarmContext;
 import com.jswarm.core.SwarmEvent;
@@ -38,27 +41,39 @@ public final class SwarmFilter {
         this.swarm = swarm;
     }
 
-    public FilterDecision decide(AssistantMessage.ToolCall toolCall) {
+    public FilterDecision decide(String sourceAgentId, AssistantMessage.ToolCall toolCall) {
         String toolName = toolCall.name();
         if ("handoff".equals(toolName)) {
             String targetId = extractArg(toolCall.arguments(), "target");
-            validateTargetExists(targetId);
+            ProtocolLimits.validateRouteTarget(targetId);
+            try {
+                RouteAuthorization.authorizeHandoff(swarm, sourceAgentId, targetId);
+            } catch (RouteDeniedException e) {
+                return FilterDecision.reject(e.reason().name(), e.modelSafeMessage());
+            }
             return FilterDecision.handoff(targetId);
         }
         if ("delegate".equals(toolName)) {
             String targetId = extractArg(toolCall.arguments(), "target");
             String task = extractArg(toolCall.arguments(), "task");
-            validateTargetExists(targetId);
+            ProtocolLimits.validateRouteTarget(targetId);
+            ProtocolLimits.validateDelegateTask(task);
+            try {
+                RouteAuthorization.authorizeDelegate(swarm, sourceAgentId, targetId);
+            } catch (RouteDeniedException e) {
+                return FilterDecision.reject(e.reason().name(), e.modelSafeMessage());
+            }
             return FilterDecision.delegate(targetId, task);
         }
-        return null;
+        return FilterDecision.external();
     }
 
-    public String executeDelegate(String targetId, String task,
+    public String executeDelegate(String sourceAgentId, String targetId, String task,
                                      ExternalToolExecutor swarmFallback,
                                      SwarmRunOptions options) {
+        RouteAuthorization.authorizeDelegate(swarm, sourceAgentId, targetId);
         JAgent target = requireJAgent(swarm.getAgent(targetId));
-        return executeDelegateInternal(target, task, swarmFallback, options, null,
+        return executeDelegateInternal(sourceAgentId, target, task, swarmFallback, options, null,
                 prompt -> {
                     if (options.advisors() != null && !options.advisors().isEmpty()) {
                         return AdvisorChatInvoker.invoke(target, prompt, options.modelTimeout(), options.advisors())
@@ -69,12 +84,13 @@ public final class SwarmFilter {
                 });
     }
 
-    public String executeDelegateStreaming(String targetId, String task,
+    public String executeDelegateStreaming(String sourceAgentId, String targetId, String task,
                                               ExternalToolExecutor swarmFallback,
                                               SwarmRunOptions options,
                                               Consumer<SwarmEvent> sink) {
+        RouteAuthorization.authorizeDelegate(swarm, sourceAgentId, targetId);
         JAgent target = requireJAgent(swarm.getAgent(targetId));
-        return executeDelegateInternal(target, task, swarmFallback, options, sink,
+        return executeDelegateInternal(sourceAgentId, target, task, swarmFallback, options, sink,
                 prompt -> {
                     if (options.advisors() != null && !options.advisors().isEmpty()) {
                         return AdvisorChatInvoker.stream(target, prompt, options.modelTimeout(), options.advisors(), sink);
@@ -83,7 +99,7 @@ public final class SwarmFilter {
                 });
     }
 
-    private String executeDelegateInternal(JAgent target, String task,
+    private String executeDelegateInternal(String sourceAgentId, JAgent target, String task,
                                             ExternalToolExecutor swarmFallback,
                                             SwarmRunOptions options,
                                             Consumer<SwarmEvent> sink,
@@ -117,9 +133,8 @@ public final class SwarmFilter {
                     return result;
                 }
 
-                AssistantMessage.ToolCall subToolCall = subAiMsg.getToolCalls().get(0);
-
                 if (turn == options.maxTurns() - 1) {
+                    AssistantMessage.ToolCall subToolCall = subAiMsg.getToolCalls().get(0);
                     String warning = "Jswarm: maximum turns (" + options.maxTurns()
                             + ") exceeded. Please summarize what you have gathered so far.";
                     subMessages.add(subAiMsg);
@@ -137,26 +152,7 @@ public final class SwarmFilter {
                     return result;
                 }
 
-                String subResult;
-                try {
-                    subResult = subExec.execute(subToolCall);
-                } catch (RuntimeException e) {
-                    if (options.exceptionProcessor() != null) {
-                        subResult = options.exceptionProcessor().process(
-                                new org.springframework.ai.tool.execution.ToolExecutionException(
-                                        org.springframework.ai.tool.definition.ToolDefinition.builder()
-                                                .name(subToolCall.name())
-                                                .inputSchema(subToolCall.arguments())
-                                                .build(),
-                                        e));
-                    } else {
-                        subResult = "Jswarm recovery: tool '" + subToolCall.name()
-                                + "' failed. Error: " + e.getMessage();
-                    }
-                }
-                subMessages.add(subAiMsg);
-                subMessages.add(ToolResponseMessage.builder().responses(List.of(
-                        new ToolResponseMessage.ToolResponse(subToolCall.id(), subToolCall.name(), subResult))).build());
+                ToolCallBatchProcessor.processDelegateTurn(this, sourceAgentId, subMessages, subAiMsg, subExec);
             }
             throw new SwarmException("Delegate max turns exceeded");
         } catch (RuntimeException e) {
@@ -166,12 +162,6 @@ public final class SwarmFilter {
                 e.addSuppressed(hookEx);
             }
             throw e;
-        }
-    }
-
-    private void validateTargetExists(String targetId) {
-        if (!swarm.contains(targetId)) {
-            throw new SwarmException("Agent not found: " + targetId);
         }
     }
 

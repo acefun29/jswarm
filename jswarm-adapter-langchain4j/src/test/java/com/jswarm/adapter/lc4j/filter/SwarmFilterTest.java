@@ -56,7 +56,7 @@ class SwarmFilterTest {
         SwarmContext.set(ctx);
 
         SwarmFilter filter = new SwarmFilter(swarm);
-        filter.executeDelegate("sub", "查询订单", null, SwarmRunOptions.defaults());
+        filter.executeDelegate("main", "sub", "查询订单", null, SwarmRunOptions.defaults());
 
         assertEquals("子Agent：用户 张三，状态 VIP", capturedSystemMessage.get());
     }
@@ -76,7 +76,7 @@ class SwarmFilterTest {
         SwarmContext.set(new SwarmContext());
 
         SwarmFilter filter = new SwarmFilter(swarm);
-        filter.executeDelegate("sub", "查询订单", null, SwarmRunOptions.defaults());
+        filter.executeDelegate("main", "sub", "查询订单", null, SwarmRunOptions.defaults());
 
         assertEquals("子Agent无占位符指令", capturedSystemMessage.get());
     }
@@ -94,22 +94,24 @@ class SwarmFilterTest {
                 .build();
 
         SwarmFilter filter = new SwarmFilter(swarm);
-        assertDoesNotThrow(() -> filter.executeDelegate("sub", "查询订单", null, SwarmRunOptions.defaults()));
+        assertDoesNotThrow(() -> filter.executeDelegate("main", "sub", "查询订单", null, SwarmRunOptions.defaults()));
         assertEquals("子Agent：用户 {user_name}", capturedSystemMessage.get());
     }
 
     @Test
     void executeDelegateShouldThrowForNonJAgent() {
         Swarm swarm = Swarm.create("test")
+                .agent(makeAgent("main", "主Agent", stubModel("done")))
                 .agent(new TestAgent("plain", "Plain", "plain agent"))
-                .entry("plain")
+                .entry("main")
+                .delegate("main", "plain")
                 .build();
 
         SwarmContext.set(new SwarmContext());
 
         SwarmFilter filter = new SwarmFilter(swarm);
         SwarmException ex = assertThrows(SwarmException.class, () ->
-                filter.executeDelegate("plain", "task", null, SwarmRunOptions.defaults()));
+                filter.executeDelegate("main", "plain", "task", null, SwarmRunOptions.defaults()));
         assertTrue(ex.getMessage().contains("SwarmFilter requires JAgent"));
     }
 
@@ -129,7 +131,7 @@ class SwarmFilterTest {
 
         SwarmContext.set(new SwarmContext());
         SwarmFilter filter = new SwarmFilter(swarm);
-        filter.executeDelegate("sub", "查询订单", null, SwarmRunOptions.defaults());
+        filter.executeDelegate("main", "sub", "查询订单", null, SwarmRunOptions.defaults());
 
         assertEquals("查询订单", taskRef.get());
     }
@@ -150,7 +152,7 @@ class SwarmFilterTest {
 
         SwarmContext.set(new SwarmContext());
         SwarmFilter filter = new SwarmFilter(swarm);
-        filter.executeDelegate("sub", "查询订单", null, SwarmRunOptions.defaults());
+        filter.executeDelegate("main", "sub", "查询订单", null, SwarmRunOptions.defaults());
 
         assertEquals("sub-done", resultRef.get());
     }
@@ -171,7 +173,7 @@ class SwarmFilterTest {
 
         SwarmContext.set(new SwarmContext());
         SwarmFilter filter = new SwarmFilter(swarm);
-        filter.executeDelegate("sub", "查询订单", null, SwarmRunOptions.defaults());
+        filter.executeDelegate("main", "sub", "查询订单", null, SwarmRunOptions.defaults());
 
         assertEquals("target from_delegate_enter", resolved.get());
     }
@@ -193,7 +195,7 @@ class SwarmFilterTest {
         SwarmContext.set(new SwarmContext());
         SwarmFilter filter = new SwarmFilter(swarm);
         try {
-            filter.executeDelegate("sub", "查询订单", null, SwarmRunOptions.defaults());
+            filter.executeDelegate("main", "sub", "查询订单", null, SwarmRunOptions.defaults());
         } catch (RuntimeException e) {
             assertEquals("model fail", e.getMessage());
         }
@@ -217,7 +219,7 @@ class SwarmFilterTest {
 
         SwarmContext.set(new SwarmContext());
         SwarmFilter filter = new SwarmFilter(swarm);
-        String result = filter.executeDelegate("sub", "do it",
+        String result = filter.executeDelegate("main", "sub", "do it",
                 (ExternalToolExecutor) (req -> "tool-ok"), SwarmRunOptions.builder().maxTurns(5).build());
 
         assertEquals("tool result processed", result);
@@ -240,7 +242,7 @@ class SwarmFilterTest {
 
         SwarmContext.set(new SwarmContext());
         SwarmFilter filter = new SwarmFilter(swarm);
-        String result = filter.executeDelegate("sub", "do it",
+        String result = filter.executeDelegate("main", "sub", "do it",
                 (ExternalToolExecutor) (req -> "step-ok"), SwarmRunOptions.builder().maxTurns(10).build());
 
         assertEquals("all steps done", result);
@@ -262,7 +264,7 @@ class SwarmFilterTest {
 
         SwarmContext.set(new SwarmContext());
         SwarmFilter filter = new SwarmFilter(swarm);
-        String result = filter.executeDelegate("sub", "do it",
+        String result = filter.executeDelegate("main", "sub", "do it",
                 (ExternalToolExecutor) (req -> { throw new RuntimeException("tool exploded"); }),
                 SwarmRunOptions.builder().maxTurns(5).build());
 
@@ -285,7 +287,7 @@ class SwarmFilterTest {
 
         SwarmContext.set(new SwarmContext());
         SwarmFilter filter = new SwarmFilter(swarm);
-        String result = filter.executeDelegate("sub", "do it", null,
+        String result = filter.executeDelegate("main", "sub", "do it", null,
                 SwarmRunOptions.builder().maxTurns(5).build());
 
         assertEquals("no tools but ok", result);
@@ -307,7 +309,7 @@ class SwarmFilterTest {
 
         SwarmContext.set(new SwarmContext());
         SwarmFilter filter = new SwarmFilter(swarm);
-        String result = filter.executeDelegate("sub", "do it",
+        String result = filter.executeDelegate("main", "sub", "do it",
                 (ExternalToolExecutor) (req -> "work-ok"), SwarmRunOptions.builder().maxTurns(1).build());
 
         assertEquals("summary after warning", result);
@@ -329,7 +331,7 @@ class SwarmFilterTest {
 
         SwarmContext.set(new SwarmContext());
         SwarmFilter filter = new SwarmFilter(swarm);
-        String result = filter.executeDelegate("sub", "do it",
+        String result = filter.executeDelegate("main", "sub", "do it",
                 (ExternalToolExecutor) (req -> "ok"), SwarmRunOptions.builder().maxTurns(1).build());
 
         assertTrue(result.contains("max turns exceeded"));
@@ -366,7 +368,7 @@ class SwarmFilterTest {
                 .build();
 
         SwarmException ex = assertThrows(SwarmException.class, () ->
-                filter.executeDelegate("sub", "do it", null, opts));
+                filter.executeDelegate("main", "sub", "do it", null, opts));
         assertTrue(ex.getMessage().contains("timed out"));
     }
 
@@ -390,14 +392,17 @@ class SwarmFilterTest {
 
         SwarmContext.set(new SwarmContext());
         SwarmFilter filter = new SwarmFilter(swarm);
-        filter.executeDelegate("sub", "task",
+        filter.executeDelegate("main", "sub", "task",
                 (ExternalToolExecutor) (req -> "ok"), SwarmRunOptions.builder().maxTurns(1).build());
 
         assertEquals("final summary", exitResult.get());
     }
 
+    private static int toolCallSeq;
+
     private static AiMessage toolMsg(String name, String args) {
         return AiMessage.from(dev.langchain4j.agent.tool.ToolExecutionRequest.builder()
+                .id("call-" + (++toolCallSeq))
                 .name(name).arguments(args).build());
     }
 

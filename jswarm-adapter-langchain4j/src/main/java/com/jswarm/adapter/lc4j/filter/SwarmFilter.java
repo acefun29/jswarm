@@ -10,6 +10,9 @@ import com.jswarm.adapter.lc4j.run.SwarmRunOptions;
 import com.jswarm.adapter.lc4j.tool.SwarmToolInjector;
 import com.jswarm.adapter.lc4j.tool.ToolExecutionMerger;
 import com.jswarm.core.Agent;
+import com.jswarm.core.ProtocolLimits;
+import com.jswarm.core.RouteAuthorization;
+import com.jswarm.core.RouteDeniedException;
 import com.jswarm.core.Swarm;
 import com.jswarm.core.SwarmContext;
 import com.jswarm.core.SwarmEvent;
@@ -37,21 +40,36 @@ public final class SwarmFilter {
         this.swarm = swarm;
     }
 
-    public FilterDecision decide(ToolExecutionRequest toolCall) {
+    public FilterDecision decide(String sourceAgentId, ToolExecutionRequest toolCall) {
         String toolName = toolCall.name();
         if ("handoff".equals(toolName)) {
-            return FilterDecision.handoff(extractArg(toolCall, "target"));
+            String targetId = extractArg(toolCall, "target");
+            ProtocolLimits.validateRouteTarget(targetId);
+            try {
+                RouteAuthorization.authorizeHandoff(swarm, sourceAgentId, targetId);
+            } catch (RouteDeniedException e) {
+                return FilterDecision.reject(e.reason().name(), e.modelSafeMessage());
+            }
+            return FilterDecision.handoff(targetId);
         }
         if ("delegate".equals(toolName)) {
-            return FilterDecision.delegate(
-                    extractArg(toolCall, "target"),
-                    extractArg(toolCall, "task"));
+            String targetId = extractArg(toolCall, "target");
+            String task = extractArg(toolCall, "task");
+            ProtocolLimits.validateRouteTarget(targetId);
+            ProtocolLimits.validateDelegateTask(task);
+            try {
+                RouteAuthorization.authorizeDelegate(swarm, sourceAgentId, targetId);
+            } catch (RouteDeniedException e) {
+                return FilterDecision.reject(e.reason().name(), e.modelSafeMessage());
+            }
+            return FilterDecision.delegate(targetId, task);
         }
-        return null;
+        return FilterDecision.external();
     }
 
-    public String executeDelegate(String targetId, String task,
+    public String executeDelegate(String sourceAgentId, String targetId, String task,
             ExternalToolExecutor swarmFallback, SwarmRunOptions options) {
+        RouteAuthorization.authorizeDelegate(swarm, sourceAgentId, targetId);
         JAgent target = requireJAgent(swarm.getAgent(targetId));
         SwarmContext context = SwarmContext.current();
 
@@ -87,9 +105,8 @@ public final class SwarmFilter {
                     return result;
                 }
 
-                ToolExecutionRequest toolCall = aiMessage.toolExecutionRequests().get(0);
-
                 if (turn == options.maxTurns() - 1) {
+                    ToolExecutionRequest toolCall = aiMessage.toolExecutionRequests().get(0);
                     String warning = "Jswarm: maximum turns (" + options.maxTurns()
                             + ") exceeded. Please summarize what you have gathered so far.";
                     subMessages.add(aiMessage);
@@ -112,15 +129,7 @@ public final class SwarmFilter {
                     return result;
                 }
 
-                String result;
-                try {
-                    result = subExec.execute(toolCall);
-                } catch (RuntimeException e) {
-                    result = "Jswarm recovery: tool '" + toolCall.name()
-                            + "' failed. Error: " + e.getMessage();
-                }
-                subMessages.add(aiMessage);
-                subMessages.add(ToolExecutionResultMessage.from(toolCall, result));
+                ToolCallBatchProcessor.processDelegateTurn(this, targetId, subMessages, aiMessage, subExec);
             }
 
             throw new SwarmException("Delegate max turns cannot be zero");
@@ -156,9 +165,10 @@ public final class SwarmFilter {
         }
     }
 
-    public String executeDelegateStreaming(String targetId, String task,
+    public String executeDelegateStreaming(String sourceAgentId, String targetId, String task,
             ExternalToolExecutor swarmFallback, SwarmRunOptions options,
             Consumer<SwarmEvent> sink) {
+        RouteAuthorization.authorizeDelegate(swarm, sourceAgentId, targetId);
         JAgent target = requireJAgent(swarm.getAgent(targetId));
         SwarmContext context = SwarmContext.current();
 
@@ -195,9 +205,8 @@ public final class SwarmFilter {
                     return result;
                 }
 
-                ToolExecutionRequest toolCall = aiMessage.toolExecutionRequests().get(0);
-
                 if (turn == options.maxTurns() - 1) {
+                    ToolExecutionRequest toolCall = aiMessage.toolExecutionRequests().get(0);
                     String warning = "Jswarm: maximum turns (" + options.maxTurns()
                             + ") exceeded. Please summarize what you have gathered so far.";
                     subMessages.add(aiMessage);
@@ -220,15 +229,7 @@ public final class SwarmFilter {
                     return result;
                 }
 
-                String result;
-                try {
-                    result = subExec.execute(toolCall);
-                } catch (RuntimeException e) {
-                    result = "Jswarm recovery: tool '" + toolCall.name()
-                            + "' failed. Error: " + e.getMessage();
-                }
-                subMessages.add(aiMessage);
-                subMessages.add(ToolExecutionResultMessage.from(toolCall, result));
+                ToolCallBatchProcessor.processDelegateTurn(this, targetId, subMessages, aiMessage, subExec);
             }
 
             throw new SwarmException("Delegate max turns cannot be zero");

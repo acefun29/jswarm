@@ -116,14 +116,22 @@ class JAgentFactoryTest {
         JAgent analyst = JAgent.fromTools("analyst", "分析师", "数据分析",
                 "你是分析师", analystModel, new TrackingTools());
 
+        JAgent router = JAgent.builder("router", "router")
+                .description("router")
+                .instructions("route")
+                .model(stubModel("routed"))
+                .build();
+
         Swarm swarm = Swarm.create("test")
+                .agent(router)
                 .agent(analyst)
-                .entry("analyst")
+                .entry("router")
+                .delegate("router", "analyst")
                 .build();
 
         SwarmContext.set(new SwarmContext());
         SwarmFilter filter = new SwarmFilter(swarm);
-        String result = filter.executeDelegate("analyst", "analyze sales", null,
+        String result = filter.executeDelegate("router", "analyst", "analyze sales", null,
                 SwarmRunOptions.builder().maxTurns(5).build());
 
         assertEquals("analyst done", result);
@@ -151,13 +159,21 @@ class JAgentFactoryTest {
         ctx.put("status", "initial");
         SwarmContext.set(ctx);
 
+        JAgent router = JAgent.builder("main", "main")
+                .description("main")
+                .instructions("main")
+                .model(stubModel("main"))
+                .build();
+
         Swarm swarm = Swarm.create("test")
+                .agent(router)
                 .agent(agent)
-                .entry("a")
+                .entry("main")
+                .delegate("main", "a")
                 .build();
 
         SwarmFilter filter = new SwarmFilter(swarm);
-        filter.executeDelegate("a", "task", null, SwarmRunOptions.builder().maxTurns(5).build());
+        filter.executeDelegate("main", "a", "task", null, SwarmRunOptions.builder().maxTurns(5).build());
 
         assertEquals("status initial", capturedPrompt.get());
         assertEquals("updated", ctx.get("status"));
@@ -171,8 +187,11 @@ class JAgentFactoryTest {
         }
     }
 
+    private static int toolCallSeq;
+
     private static AiMessage toolMsg(String name, String args) {
         return AiMessage.from(dev.langchain4j.agent.tool.ToolExecutionRequest.builder()
+                .id("call-" + (++toolCallSeq))
                 .name(name).arguments(args).build());
     }
 

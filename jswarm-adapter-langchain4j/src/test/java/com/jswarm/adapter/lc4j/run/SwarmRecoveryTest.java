@@ -34,8 +34,12 @@ class SwarmRecoveryTest {
                 .build();
     }
 
+    private static int toolCallSeq;
+
     private static AiMessage toolMsg(String name, String args) {
-        return AiMessage.from(ToolExecutionRequest.builder().name(name).arguments(args).build());
+        return AiMessage.from(ToolExecutionRequest.builder()
+                .id("call-" + (++toolCallSeq))
+                .name(name).arguments(args).build());
     }
 
     private static ChatModel sequenceModel(AiMessage... msgs) {
@@ -145,14 +149,18 @@ class SwarmRecoveryTest {
 
     @Test
     void shouldThrowWhenRecoveryExceeded() {
-        ChatModel model = sequenceModel(
-                toolMsg("handoff", "bad"),
-                toolMsg("handoff", "also-bad"),
+        ChatModel mainModel = sequenceModel(
+                toolMsg("delegate", "{\"target\":\"sub\",\"task\":\"do it\"}"),
+                toolMsg("delegate", "{\"target\":\"sub\",\"task\":\"do it again\"}"),
                 AiMessage.from("never"));
 
+        JAgent main = agent("main", "hi", mainModel);
+        JAgent sub = agent("sub", "sub hi", throwingModel(new RuntimeException("sub fail")));
+
         Swarm swarm = Swarm.create("test")
-                .agent(agent("a", "hi", model))
-                .entry("a")
+                .agent(main).agent(sub)
+                .entry("main")
+                .delegate("main", "sub")
                 .build();
 
         SwarmRunner runner = SwarmRunner.create(swarm,
@@ -192,26 +200,28 @@ class SwarmRecoveryTest {
     void shouldTriggerOnExitWhenRecoveryExceeded() {
         AtomicReference<String> exited = new AtomicReference<>();
 
-        ChatModel model = sequenceModel(
-                toolMsg("handoff", "bad"),
-                toolMsg("handoff", "also-bad"),
+        ChatModel mainModel = sequenceModel(
+                toolMsg("delegate", "{\"target\":\"sub\",\"task\":\"do it\"}"),
+                toolMsg("delegate", "{\"target\":\"sub\",\"task\":\"do it again\"}"),
                 AiMessage.from("never"));
 
-        JAgent a = lifecycleAgent("a", "hi",
+        JAgent main = lifecycleAgent("main", "hi",
                 ctx -> {},
-                ctx -> exited.set("a"),
-                model);
+                ctx -> exited.set("main"),
+                mainModel);
+        JAgent sub = agent("sub", "sub hi", throwingModel(new RuntimeException("sub fail")));
 
         Swarm swarm = Swarm.create("test")
-                .agent(a)
-                .entry("a")
+                .agent(main).agent(sub)
+                .entry("main")
+                .delegate("main", "sub")
                 .build();
 
         SwarmRunner runner = SwarmRunner.create(swarm,
                 SwarmRunOptions.builder().maxRecoveryAttempts(1).build());
 
         assertThrows(SwarmException.class, () -> runner.run("hi"));
-        assertEquals("a", exited.get());
+        assertEquals("main", exited.get());
     }
 
     @Test

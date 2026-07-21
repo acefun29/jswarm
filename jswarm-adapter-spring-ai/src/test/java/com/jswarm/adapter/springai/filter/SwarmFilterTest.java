@@ -34,11 +34,16 @@ class SwarmFilterTest {
         ChatModel model = capturingModel(captured);
 
         JAgent sub = agent("sub", "子Agent：用户 {user_name}", model);
-        Swarm swarm = Swarm.create("s").agent(sub).entry("sub").build();
+        Swarm swarm = Swarm.create("s")
+                .agent(agent("main", "main", stubModel("done")))
+                .agent(sub)
+                .entry("main")
+                .delegate("main", "sub")
+                .build();
         SwarmContext.set(new SwarmContext().put("user_name", "张三"));
 
         SwarmFilter filter = new SwarmFilter(swarm);
-        filter.executeDelegate("sub", "task", null, SwarmRunOptions.defaults());
+        filter.executeDelegate("main", "sub", "task", null, SwarmRunOptions.defaults());
 
         assertEquals("子Agent：用户 张三", captured.get());
     }
@@ -50,12 +55,17 @@ class SwarmFilterTest {
             @Override public String name() { return "Plain"; }
             @Override public String description() { return "plain agent"; }
         };
-        Swarm swarm = Swarm.create("s").agent(plain).entry("plain").build();
+        Swarm swarm = Swarm.create("s")
+                .agent(agent("main", "main", stubModel("done")))
+                .agent(plain)
+                .entry("main")
+                .delegate("main", "plain")
+                .build();
         SwarmContext.set(new SwarmContext());
 
         SwarmFilter filter = new SwarmFilter(swarm);
         SwarmException ex = assertThrows(SwarmException.class, () ->
-                filter.executeDelegate("plain", "task", null, SwarmRunOptions.defaults()));
+                filter.executeDelegate("main", "plain", "task", null, SwarmRunOptions.defaults()));
         assertTrue(ex.getMessage().contains("not a JAgent"));
     }
 
@@ -66,11 +76,16 @@ class SwarmFilterTest {
                 textMsg("processed"));
         JAgent sub = agent("sub", "hi", model);
 
-        Swarm swarm = Swarm.create("s").agent(sub).entry("sub").build();
+        Swarm swarm = Swarm.create("s")
+                .agent(agent("main", "main", stubModel("done")))
+                .agent(sub)
+                .entry("main")
+                .delegate("main", "sub")
+                .build();
         SwarmContext.set(new SwarmContext());
         SwarmFilter filter = new SwarmFilter(swarm);
 
-        String result = filter.executeDelegate("sub", "do it",
+        String result = filter.executeDelegate("main", "sub", "do it",
                 (ExternalToolExecutor) (req -> "tool-ok"),
                 SwarmRunOptions.builder().maxTurns(5).build());
 
@@ -89,7 +104,7 @@ class SwarmFilterTest {
         when(tc.arguments()).thenReturn("{\"target\":\"b\"}");
 
         SwarmFilter filter = new SwarmFilter(swarm);
-        FilterDecision decision = filter.decide(tc);
+        FilterDecision decision = filter.decide("a", tc);
 
         assertTrue(decision instanceof FilterDecision.Handoff);
         assertEquals("b", ((FilterDecision.Handoff) decision).targetAgentId());
@@ -107,7 +122,7 @@ class SwarmFilterTest {
         when(tc.arguments()).thenReturn("{\"target\":\"b\",\"task\":\"do it\"}");
 
         SwarmFilter filter = new SwarmFilter(swarm);
-        FilterDecision decision = filter.decide(tc);
+        FilterDecision decision = filter.decide("a", tc);
 
         assertTrue(decision instanceof FilterDecision.Delegate);
         FilterDecision.Delegate d = (FilterDecision.Delegate) decision;
@@ -126,7 +141,7 @@ class SwarmFilterTest {
         when(tc.arguments()).thenReturn("{}");
 
         SwarmFilter filter = new SwarmFilter(swarm);
-        assertNull(filter.decide(tc));
+        assertTrue(filter.decide("a", tc) instanceof FilterDecision.External);
     }
 
     private JAgent agent(String id, String instructions, ChatModel model) {

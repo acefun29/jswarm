@@ -10,7 +10,21 @@ public sealed interface FilterDecision {
         return new Delegate(targetAgentId, task);
     }
 
+    static FilterDecision external() {
+        return External.INSTANCE;
+    }
+
+    static FilterDecision reject(String reason, String modelSafeMessage) {
+        return new Reject(reason, modelSafeMessage);
+    }
+
     record Handoff(String targetAgentId) implements FilterDecision {}
 
     record Delegate(String targetAgentId, String task) implements FilterDecision {}
+
+    record External() implements FilterDecision {
+        static final External INSTANCE = new External();
+    }
+
+    record Reject(String reason, String modelSafeMessage) implements FilterDecision {}
 }

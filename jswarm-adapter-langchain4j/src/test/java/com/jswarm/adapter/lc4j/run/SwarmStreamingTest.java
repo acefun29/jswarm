@@ -291,6 +291,7 @@ class SwarmStreamingTest {
                 handler.onPartialResponse("loop");
                 handler.onCompleteResponse(ChatResponse.builder()
                         .aiMessage(AiMessage.from(ToolExecutionRequest.builder()
+                                .id("call-1")
                                 .name("handoff")
                                 .arguments("{\"target\": \"nonexistent\"}")
                                 .build()))
@@ -354,6 +355,7 @@ class SwarmStreamingTest {
             @Override
             public void chat(ChatRequest request, StreamingChatResponseHandler handler) {
                 ToolExecutionRequest tc = ToolExecutionRequest.builder()
+                        .id("call-1")
                         .name("handoff")
                         .arguments("{\"target\": \"" + target + "\"}")
                         .build();
@@ -368,6 +370,7 @@ class SwarmStreamingTest {
             @Override
             public void chat(ChatRequest request, StreamingChatResponseHandler handler) {
                 ToolExecutionRequest tc = ToolExecutionRequest.builder()
+                        .id("call-1")
                         .name("delegate")
                         .arguments("{\"target\": \"" + target + "\", \"task\": \"" + task + "\"}")
                         .build();
@@ -384,6 +387,7 @@ class SwarmStreamingTest {
             public void chat(ChatRequest request, StreamingChatResponseHandler handler) {
                 if (callCount++ == 0) {
                     ToolExecutionRequest tc = ToolExecutionRequest.builder()
+                            .id("call-1")
                             .name(toolName)
                             .arguments(args)
                             .build();

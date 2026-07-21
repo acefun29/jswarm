@@ -164,6 +164,7 @@ class SwarmListenerTest {
         Swarm swarm = Swarm.create("s")
                 .agent(router).agent(expert)
                 .entry("router")
+                .delegate("router", "expert")
                 .build();
         SwarmRunOptions options = SwarmRunOptions.builder().listener(collector).maxTurns(5).build();
         SwarmRunner.create(swarm, options).run("calculate");

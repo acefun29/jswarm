@@ -68,7 +68,7 @@ class JAgentExtensionTest {
                 .build();
 
         SwarmContext.set(new SwarmContext());
-        new SwarmFilter(swarm).executeDelegate("sub", "查询订单", null, SwarmRunOptions.defaults());
+        new SwarmFilter(swarm).executeDelegate("main", "sub", "查询订单", null, SwarmRunOptions.defaults());
         assertEquals("sub-done", resultRef.get());
     }
 
@@ -127,11 +127,17 @@ class JAgentExtensionTest {
         SwarmContext.set(ctx);
 
         Swarm swarm = Swarm.create("test")
+                .agent(JAgent.builder("main", "main")
+                        .description("d")
+                        .instructions("hi")
+                        .model(stubModel("x"))
+                        .build())
                 .agent(agent)
-                .entry("a")
+                .entry("main")
+                .delegate("main", "a")
                 .build();
 
-        new SwarmFilter(swarm).executeDelegate("a", "task", null, SwarmRunOptions.defaults());
+        new SwarmFilter(swarm).executeDelegate("main", "a", "task", null, SwarmRunOptions.defaults());
         assertEquals("branch-vip", captured.get());
     }
 
@@ -158,7 +164,7 @@ class JAgentExtensionTest {
                 .build();
 
         SwarmContext.set(new SwarmContext());
-        new SwarmFilter(swarm).executeDelegate("sub", "查询订单", null, SwarmRunOptions.defaults());
+        new SwarmFilter(swarm).executeDelegate("main", "sub", "查询订单", null, SwarmRunOptions.defaults());
         assertEquals("查询订单", taskRef.get());
     }
 
