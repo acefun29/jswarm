@@ -14,22 +14,6 @@
     <name>Jswarm Examples Spring AI</name>
     <description>Jswarm Spring AI Adapter Showcase Web 示例</description>
 
-    <properties>
-        <spring-boot.version>3.3.5</spring-boot.version>
-    </properties>
-
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-dependencies</artifactId>
-                <version>${spring-boot.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
-
     <dependencies>
         <dependency>
             <groupId>com.jswarm</groupId>

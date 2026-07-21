@@ -23,7 +23,6 @@
             <version>${project.version}</version>
         </dependency>
 
-        <!-- Spring AI 核心接口（ChatModel、ToolCallback、ToolCallingManager 均在 spring-ai-model 中） -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-model</artifactId>
@@ -33,32 +32,26 @@
             <artifactId>spring-ai-client-chat</artifactId>
         </dependency>
 
-        <!-- Test -->
         <dependency>
             <groupId>org.mockito</groupId>
             <artifactId>mockito-core</artifactId>
             <scope>test</scope>
         </dependency>
 
-        <!-- Phase 3: Micrometer (optional, for SwarmMetricsAdvisor) -->
         <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-core</artifactId>
-            <version>1.13.6</version>
             <optional>true</optional>
         </dependency>
 
-        <!-- Phase 3: Spring Boot AutoConfiguration (optional) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-autoconfigure</artifactId>
-            <version>3.3.5</version>
             <optional>true</optional>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-configuration-processor</artifactId>
-            <version>3.3.5</version>
             <optional>true</optional>
         </dependency>
     </dependencies>

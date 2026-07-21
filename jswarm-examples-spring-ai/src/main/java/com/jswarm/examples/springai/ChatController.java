@@ -20,7 +20,7 @@ public class ChatController {
 
     private final SwarmRunner runner;
     private final Map<String, SwarmContext> sessions = new ConcurrentHashMap<>();
-    private final ExecutorService sseExecutor = Executors.newVirtualThreadPerTaskExecutor();
+    private final ExecutorService sseExecutor = Executors.newCachedThreadPool();
 
     public ChatController(SwarmRunner runner) {
         this.runner = runner;

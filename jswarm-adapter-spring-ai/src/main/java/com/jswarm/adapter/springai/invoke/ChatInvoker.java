@@ -17,7 +17,7 @@ import java.util.concurrent.TimeoutException;
 
 public final class ChatInvoker {
 
-    private static final ExecutorService EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
+    private static final ExecutorService EXECUTOR = Executors.newCachedThreadPool();
 
     private ChatInvoker() {
     }

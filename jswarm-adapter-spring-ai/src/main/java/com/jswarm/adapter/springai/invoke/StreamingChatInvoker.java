@@ -25,7 +25,7 @@ import java.util.function.Consumer;
 
 public final class StreamingChatInvoker {
 
-    private static final ExecutorService EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
+    private static final ExecutorService EXECUTOR = Executors.newCachedThreadPool();
 
     private StreamingChatInvoker() {
     }

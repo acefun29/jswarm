@@ -33,7 +33,7 @@ import java.util.function.Consumer;
 
 public final class AdvisorChatInvoker {
 
-    private static final ExecutorService EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
+    private static final ExecutorService EXECUTOR = Executors.newCachedThreadPool();
 
     private AdvisorChatInvoker() {}
 

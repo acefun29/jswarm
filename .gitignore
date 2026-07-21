@@ -31,13 +31,13 @@ data/
 *.db-wal
 *.db-shm
 
+# 本地协作与本地文档（不提交）
 AGENTS.md
 doc/
 
+# 旁路示例 / 本地工程（非正式发布物）
 compliance-swarm/
 jswarm-smart-oa/
-
-*.md
 
 # AI / 编辑器本地配置
 .claude/
@@ -49,6 +49,4 @@ jswarm-smart-oa/
 .env.*
 *.pem
 *.key
-!README.md
-!README_EN.md
 .arts

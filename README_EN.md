@@ -1,14 +1,15 @@
-<p align="center">
-  <img src="./jswarm_bee_icon.png" alt="Jswarm Logo" width="160" />
-</p>
+<div align="center">
 
-<h1 align="center">Jswarm</h1>
+![Jswarm](jswarm.png)
+
+</div>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" /></a>
   <img src="https://img.shields.io/badge/JDK-17%2B-orange.svg" alt="JDK 17+" />
-  <img src="https://img.shields.io/badge/LangChain4j-1.15.x-green.svg" alt="LangChain4j" />
-  <img src="https://img.shields.io/badge/Spring_AI-1.0.0+-blue.svg" alt="Spring AI" />
+  <img src="https://img.shields.io/badge/LangChain4j-1.15.1-green.svg" alt="LangChain4j" />
+  <img src="https://img.shields.io/badge/Spring_AI-2.0.0-blue.svg" alt="Spring AI" />
+  <img src="https://img.shields.io/badge/Spring_Boot-4.0.7-brightgreen.svg" alt="Spring Boot" />
 </p>
 
 <p align="center">
@@ -32,7 +33,11 @@
 
 Jswarm handles the **orchestration layer** for multi-agent systems — agent topology, handoff/delegate routing, and request-scoped context. LLM calls, tool execution, and message storage are delegated to LangChain4j, Spring AI, or other adapters.
 
-**Requirements:** JDK 17+ · Maven 3.8+ · LangChain4j 1.15.x or Spring AI 1.0.0+ (2.0.x)
+**Requirements:** JDK 17+ (compile `release=17`) · Maven 3.8+ · LangChain4j **1.15.1** or Spring AI **2.0.0** + Spring Boot **4.0.7**
+
+**Canonical repository:** [github.com/acefun29/Jswarm](https://github.com/acefun29/Jswarm) · Maven coordinates `com.jswarm:*:1.0.0-SNAPSHOT`
+
+See `adr/` for the compatibility matrix and module boundaries. Unsupported: Spring AI 2.0 + Boot 3.x.
 
 ---
 
@@ -99,7 +104,7 @@ jswarm-examples-spring-ai Showcase web demo (Spring AI)
 ### 1. Build
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/acefun29/Jswarm.git
 cd Jswarm
 mvn install -DskipTests
 ```
@@ -284,17 +289,20 @@ Session data is persisted in `data/showcase.db` (gitignored, auto-created locall
 
 ### jswarm-adapter-spring-ai
 
-- `JAgent.builder()`: build agents with hook lambdas and Spring AI `@Tool` (`ToolCallback`) bridging
-- `JAgent.fromTools()` / `fromAiService()`: bridge existing Spring AI tool callbacks
-- `JAgent.decorate()`: decorator pattern to layer hooks
-- `SwarmRunner.runStreaming()`: run with streaming chat models and subscribe to comprehensive `SwarmEvent` lifecycles
-- `JswarmAutoConfiguration`: Spring Boot auto-configuration, supporting properties like `jswarm.max-turns`
-- `SwarmLoggingAdvisor` / `SwarmMetricsAdvisor`: metrics and logging support based on Spring AI Advisor
+- `JAgent.builder()` / `fromTools()` / `decorate()`: build and bridge (stable)
+- `SwarmRunner.run()` / `runStreaming()`: sync and streaming (stable)
+- Spring AI `fromAiService()`: **not implemented** (throws; use `builder` / `fromTools`)
+- `JswarmAutoConfiguration`, `SwarmLoggingAdvisor` / `SwarmMetricsAdvisor`: **experimental** (Boot 4.0.7 matrix; full governance in plan-06)
 
 ### Examples Modules
 
 - `jswarm-examples`: HTTP service + static frontend using LangChain4j
 - `jswarm-examples-spring-ai`: Chat service with SSE using Spring AI + Spring Boot
+
+### Known Limitations
+
+- A single `run()` / `runStreaming()` call does **not** persist multi-turn history across invocations; sessions are application-owned.
+- Cross-`run()` recovery is not a public baseline promise.
 
 ---
 
@@ -329,15 +337,16 @@ The examples modules require a live LLM and are typically skipped in CI. Unit te
 - LangChain4j adapter and SwarmRunner
 - Spring AI adapter and SwarmRunner
 - Handoff / delegate routing and tool injection
-- Lifecycle hooks, JAgent extension paths (builder / decorate / fromAiService)
+- Lifecycle hooks, JAgent extension paths (builder / decorate; LC4j `fromAiService`)
 - Dynamic instructions, error recovery
-- SSE Streaming and event-driven orchestration with Spring AI
-- Spring Boot AutoConfiguration (Spring AI adapter only)
+- `runStreaming` on both adapters and Spring AI Showcase SSE
+- Spring Boot AutoConfiguration (experimental, Spring AI adapter only)
 
 **Planned**
 
 - Additional model and framework adapters
-- Unified streaming API and streaming support for LangChain4j
+- Spring starter split and observability governance
+- Implement or formally remove Spring AI `fromAiService`
 
 ---
 
