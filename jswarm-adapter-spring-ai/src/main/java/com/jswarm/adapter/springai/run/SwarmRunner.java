@@ -16,6 +16,10 @@ import com.jswarm.core.Swarm;
 import com.jswarm.core.SwarmContext;
 import com.jswarm.core.SwarmEvent;
 import com.jswarm.core.SwarmException;
+import com.jswarm.spi.id.AgentId;
+import com.jswarm.spi.run.RunExecution;
+import com.jswarm.spi.run.RunScope;
+import com.jswarm.spi.run.RunScopeChecks;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
@@ -44,6 +48,8 @@ public final class SwarmRunner {
     private final SwarmFilter filter;
     private final ExternalToolExecutor swarmToolExecutor;
     private SwarmRunListener listener;
+    private final AtomicBoolean running = new AtomicBoolean(false);
+    private SwarmRunListener activeListener;
 
     private SwarmRunner(Swarm swarm, SwarmRunOptions options, ExternalToolExecutor swarmToolExecutor,
                         SwarmRunListener listener) {
@@ -54,7 +60,14 @@ public final class SwarmRunner {
         this.listener = listener;
     }
 
+    /**
+     * @deprecated Set listener before {@code run()} via factory methods; cannot change during an active run.
+     */
+    @Deprecated
     public void setListener(SwarmRunListener listener) {
+        if (running.get()) {
+            throw new IllegalStateException("Cannot set listener while run is in progress");
+        }
         this.listener = listener;
     }
 
@@ -99,34 +112,38 @@ public final class SwarmRunner {
     }
 
     public String run(String userMessage, SwarmContext context) {
-        SwarmContext previous = SwarmContext.current();
-        SwarmContext.set(context);
-        try {
-            return runInternal(userMessage);
-        } finally {
-            if (previous != null) {
-                SwarmContext.set(previous);
-            } else {
-                SwarmContext.clear();
-            }
-        }
+        return withRunScope(swarm.entryAgentId(), context, () -> runInternal(userMessage));
     }
 
     public record RunResult(String reply, String currentAgentId, List<Message> updatedHistory) {
+        public RunResult {
+            updatedHistory = List.copyOf(updatedHistory);
+        }
     }
 
     public RunResult runWithHistory(String userMessage, List<Message> priorHistory,
                                     String startAgentId, SwarmContext context, boolean skipEntryHook) {
-        SwarmContext previous = SwarmContext.current();
-        SwarmContext.set(context);
+        return withRunScope(startAgentId, context,
+                () -> runWithHistoryInternal(userMessage, priorHistory, startAgentId, skipEntryHook));
+    }
+
+    private <T> T withRunScope(String startAgentId, SwarmContext context, java.util.concurrent.Callable<T> action) {
+        if (!running.compareAndSet(false, true)) {
+            throw new IllegalStateException("SwarmRunner is already running");
+        }
+        activeListener = listener;
         try {
-            return runWithHistoryInternal(userMessage, priorHistory, startAgentId, skipEntryHook);
+            SwarmContext effective = context != null ? context : new SwarmContext();
+            return RunExecution.execute(
+                    swarm,
+                    startAgentId,
+                    RunExecution.limits(options.maxTurns(), options.maxDelegateDepth()),
+                    RunExecution.policy(options.maxRecoveryAttempts(), options.modelTimeout(), options.delegateStreaming()),
+                    effective,
+                    action);
         } finally {
-            if (previous != null) {
-                SwarmContext.set(previous);
-            } else {
-                SwarmContext.clear();
-            }
+            activeListener = null;
+            running.set(false);
         }
     }
 
@@ -152,6 +169,7 @@ public final class SwarmRunner {
             fireOnEnter(currentAgentId, skipEntryHook ? "RESUME" : "ENTRY");
 
             for (int turn = 0; turn < options.maxTurns(); turn++) {
+                RunScopeChecks.beforeTurn(RunScope.current());
                 Agent agent = swarm.getAgent(currentAgentId);
                 JAgent runtimeAgent = requireJAgent(agent);
 
@@ -224,6 +242,10 @@ public final class SwarmRunner {
                     fireOnExit(currentAgentId);
                     fireOnHandoff(currentAgentId, h.targetAgentId());
                     currentAgentId = h.targetAgentId();
+                    RunScope scope = RunScope.current();
+                    if (scope != null) {
+                        RunScope.bind(scope.withAgent(AgentId.of(currentAgentId)));
+                    }
                     Agent to = swarm.getAgent(currentAgentId);
                     to.onEnter(SwarmContext.current());
                     activeAgentId = currentAgentId;
@@ -299,17 +321,10 @@ public final class SwarmRunner {
     }
 
     public void runStreaming(String userMessage, SwarmContext context, Consumer<SwarmEvent> sink) {
-        SwarmContext previous = SwarmContext.current();
-        SwarmContext.set(context);
-        try {
+        withRunScope(swarm.entryAgentId(), context, () -> {
             runStreamingInternal(userMessage, sink);
-        } finally {
-            if (previous != null) {
-                SwarmContext.set(previous);
-            } else {
-                SwarmContext.clear();
-            }
-        }
+            return null;
+        });
     }
 
     private void runStreamingInternal(String userMessage, Consumer<SwarmEvent> sink) {
@@ -329,6 +344,7 @@ public final class SwarmRunner {
             sink.accept(new SwarmEvent.AgentEnter(currentAgentId, "ENTRY"));
 
             for (int turn = 0; turn < options.maxTurns(); turn++) {
+                RunScopeChecks.beforeTurn(RunScope.current());
                 Agent agent = swarm.getAgent(currentAgentId);
                 JAgent runtimeAgent = requireJAgent(agent);
 
@@ -389,6 +405,10 @@ public final class SwarmRunner {
                     sink.accept(new SwarmEvent.AgentExit(currentAgentId));
                     sink.accept(new SwarmEvent.Handoff(currentAgentId, h.targetAgentId()));
                     currentAgentId = h.targetAgentId();
+                    RunScope streamScope = RunScope.current();
+                    if (streamScope != null) {
+                        RunScope.bind(streamScope.withAgent(AgentId.of(currentAgentId)));
+                    }
                     Agent to = swarm.getAgent(currentAgentId);
                     to.onEnter(ctx);
                     activeAgentId = currentAgentId;
@@ -503,47 +523,47 @@ public final class SwarmRunner {
     }
 
     private void fireOnEnter(String agentId, String source) {
-        if (listener != null) try { listener.onAgentEnter(agentId, source); } catch (RuntimeException e) { logListenerFailure(e); }
+        if (activeListener != null) try { activeListener.onAgentEnter(agentId, source); } catch (RuntimeException e) { logListenerFailure(e); }
     }
 
     private void fireOnExit(String agentId) {
-        if (listener != null) try { listener.onAgentExit(agentId); } catch (RuntimeException e) { logListenerFailure(e); }
+        if (activeListener != null) try { activeListener.onAgentExit(agentId); } catch (RuntimeException e) { logListenerFailure(e); }
     }
 
     private void fireOnToolCall(String agentId, String toolName, String args) {
-        if (listener != null) try { listener.onToolCall(agentId, toolName, args); } catch (RuntimeException e) { logListenerFailure(e); }
+        if (activeListener != null) try { activeListener.onToolCall(agentId, toolName, args); } catch (RuntimeException e) { logListenerFailure(e); }
     }
 
     private void fireOnToolResult(String agentId, String toolName, String result) {
-        if (listener != null) try { listener.onToolResult(agentId, toolName, result); } catch (RuntimeException e) { logListenerFailure(e); }
+        if (activeListener != null) try { activeListener.onToolResult(agentId, toolName, result); } catch (RuntimeException e) { logListenerFailure(e); }
     }
 
     private void fireOnHandoff(String from, String to) {
-        if (listener != null) try { listener.onHandoff(from, to); } catch (RuntimeException e) { logListenerFailure(e); }
+        if (activeListener != null) try { activeListener.onHandoff(from, to); } catch (RuntimeException e) { logListenerFailure(e); }
     }
 
     private void fireOnDelegateStart(String parent, String target, String task) {
-        if (listener != null) try { listener.onDelegateStart(parent, target, task); } catch (RuntimeException e) { logListenerFailure(e); }
+        if (activeListener != null) try { activeListener.onDelegateStart(parent, target, task); } catch (RuntimeException e) { logListenerFailure(e); }
     }
 
     private void fireOnDelegateEnd(String parent, String target) {
-        if (listener != null) try { listener.onDelegateEnd(parent, target); } catch (RuntimeException e) { logListenerFailure(e); }
+        if (activeListener != null) try { activeListener.onDelegateEnd(parent, target); } catch (RuntimeException e) { logListenerFailure(e); }
     }
 
     private void fireOnRecovery(String agentId, String reason) {
-        if (listener != null) try { listener.onRecovery(agentId, reason); } catch (RuntimeException e) { logListenerFailure(e); }
+        if (activeListener != null) try { activeListener.onRecovery(agentId, reason); } catch (RuntimeException e) { logListenerFailure(e); }
     }
 
     private void fireOnRunComplete(String finalText) {
-        if (listener != null) try { listener.onRunComplete(finalText); } catch (RuntimeException e) { logListenerFailure(e); }
+        if (activeListener != null) try { activeListener.onRunComplete(finalText); } catch (RuntimeException e) { logListenerFailure(e); }
     }
 
     private void fireOnRunFail(String agentId, String error) {
-        if (listener != null) try { listener.onRunFail(agentId, error); } catch (RuntimeException e) { logListenerFailure(e); }
+        if (activeListener != null) try { activeListener.onRunFail(agentId, error); } catch (RuntimeException e) { logListenerFailure(e); }
     }
 
     private void fireOnMessageHistoryUpdated(List<Message> messages) {
-        if (listener != null) try { listener.onMessageHistoryUpdated(messages); } catch (RuntimeException e) { logListenerFailure(e); }
+        if (activeListener != null) try { activeListener.onMessageHistoryUpdated(messages); } catch (RuntimeException e) { logListenerFailure(e); }
     }
 
     private void logListenerFailure(RuntimeException e) {

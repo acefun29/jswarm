@@ -1,5 +1,6 @@
 package com.jswarm.adapter.springai.run;
 
+import com.jswarm.spi.run.RunDefaults;
 import java.time.Duration;
 import java.util.List;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
@@ -16,7 +17,7 @@ public record SwarmRunOptions(
         ToolExecutionExceptionProcessor exceptionProcessor) {
 
     public static SwarmRunOptions defaults() {
-        return new SwarmRunOptions(10, 2, 3, null, true, null, null, null);
+        return new SwarmRunOptions(10, 2, 3, RunDefaults.MODEL_TIMEOUT, true, null, null, null);
     }
 
     public static Builder builder() {
@@ -27,7 +28,7 @@ public record SwarmRunOptions(
         private int maxTurns = 10;
         private int maxRecoveryAttempts = 2;
         private int maxDelegateDepth = 3;
-        private Duration modelTimeout;
+        private Duration modelTimeout = RunDefaults.MODEL_TIMEOUT;
         private boolean delegateStreaming = true;
         private SwarmRunListener listener;
         private List<Advisor> advisors;
@@ -77,7 +78,8 @@ public record SwarmRunOptions(
             if (maxTurns <= 0) throw new IllegalArgumentException("maxTurns must be positive, got: " + maxTurns);
             if (maxRecoveryAttempts <= 0) throw new IllegalArgumentException("maxRecoveryAttempts must be positive, got: " + maxRecoveryAttempts);
             if (maxDelegateDepth <= 0) throw new IllegalArgumentException("maxDelegateDepth must be positive, got: " + maxDelegateDepth);
-            return new SwarmRunOptions(maxTurns, maxRecoveryAttempts, maxDelegateDepth, modelTimeout, delegateStreaming, listener, advisors, exceptionProcessor);
+            Duration timeout = modelTimeout != null ? modelTimeout : RunDefaults.MODEL_TIMEOUT;
+            return new SwarmRunOptions(maxTurns, maxRecoveryAttempts, maxDelegateDepth, timeout, delegateStreaming, listener, advisors, exceptionProcessor);
         }
     }
 }

@@ -3,6 +3,8 @@ package com.jswarm.adapter.springai.filter;
 import com.jswarm.adapter.springai.ExternalToolExecutor;
 import com.jswarm.core.ProtocolLimits;
 import com.jswarm.core.SwarmException;
+import com.jswarm.spi.run.RunScope;
+import com.jswarm.spi.run.RunScopeChecks;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
@@ -94,12 +96,14 @@ public final class ToolCallBatchProcessor {
             }
             String result;
             try {
+                RunScopeChecks.beforeToolCall(RunScope.current());
                 result = exec.execute(call);
             } catch (RuntimeException e) {
                 result = "Jswarm recovery: tool '" + call.name()
                         + "' failed. Please answer directly or try another available tool.";
             }
             result = ProtocolLimits.truncateResult(result);
+            RunScopeChecks.recordToolResultBytes(RunScope.current(), result);
             if (onToolResult != null) {
                 onToolResult.accept(call.name(), result);
             }
@@ -135,12 +139,15 @@ public final class ToolCallBatchProcessor {
         for (AssistantMessage.ToolCall call : calls) {
             String result;
             try {
+                RunScopeChecks.beforeToolCall(RunScope.current());
                 result = exec.execute(call);
             } catch (RuntimeException e) {
                 result = "Jswarm recovery: tool '" + call.name() + "' failed.";
             }
+            result = ProtocolLimits.truncateResult(result);
+            RunScopeChecks.recordToolResultBytes(RunScope.current(), result);
             responses.add(new ToolResponseMessage.ToolResponse(
-                    call.id(), call.name(), ProtocolLimits.truncateResult(result)));
+                    call.id(), call.name(), result));
         }
         subMessages.add(ToolResponseMessage.builder().responses(responses).build());
         return new Outcome.Continue();

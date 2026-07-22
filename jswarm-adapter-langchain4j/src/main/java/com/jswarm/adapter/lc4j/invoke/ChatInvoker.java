@@ -2,7 +2,9 @@ package com.jswarm.adapter.lc4j.invoke;
 
 import com.jswarm.adapter.lc4j.JAgent;
 import com.jswarm.core.SwarmContext;
-import com.jswarm.core.SwarmException;
+import com.jswarm.spi.error.SwarmErrorMapper;
+import com.jswarm.spi.run.RunScope;
+import com.jswarm.spi.run.RunScopeChecks;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.model.chat.request.ChatRequest;
 
@@ -26,6 +28,9 @@ public final class ChatInvoker {
     }
 
     public static AiMessage invoke(JAgent agent, ChatRequest request, Duration timeout) {
+        RunScope scope = RunScope.current();
+        RunScopeChecks.beforeModelCall(scope);
+        Duration effectiveTimeout = RunScopeChecks.effectiveModelTimeout(scope, timeout);
         SwarmContext context = SwarmContext.current();
         Future<AiMessage> future = CHAT_EXECUTOR.submit(() -> {
             SwarmContext previous = SwarmContext.current();
@@ -41,20 +46,21 @@ public final class ChatInvoker {
             }
         });
         try {
-            return future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            return future.get(effectiveTimeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
             future.cancel(true);
-            throw new SwarmException("LLM call timed out after " + timeout);
+            throw SwarmErrorMapper.toRuntimeException(e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             future.cancel(true);
-            throw new SwarmException("LLM call interrupted", e);
+            throw SwarmErrorMapper.toRuntimeException(e);
         } catch (ExecutionException e) {
-            Throwable cause = e.getCause();
+            future.cancel(true);
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
             if (cause instanceof RuntimeException re) {
-                throw re;
+                throw SwarmErrorMapper.toRuntimeException(re);
             }
-            throw new SwarmException("LLM call failed", cause);
+            throw SwarmErrorMapper.toRuntimeException(cause);
         }
     }
 }

@@ -26,6 +26,7 @@
 
     <modules>
         <module>jswarm-core</module>
+        <module>jswarm-spi</module>
         <module>jswarm-adapter-langchain4j</module>
         <module>jswarm-adapter-spring-ai</module>
         <module>jswarm-examples</module>

@@ -1,5 +1,7 @@
 package com.jswarm.adapter.lc4j.run;
 
+import com.jswarm.spi.run.RunDefaults;
+
 import java.time.Duration;
 
 public final class SwarmRunOptions {
@@ -45,7 +47,7 @@ public final class SwarmRunOptions {
     }
 
     public static SwarmRunOptions defaults() {
-        return new Builder().build();
+        return new Builder().modelTimeout(RunDefaults.MODEL_TIMEOUT).build();
     }
 
     public static Builder builder() {

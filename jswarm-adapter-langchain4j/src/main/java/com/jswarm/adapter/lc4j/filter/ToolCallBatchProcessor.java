@@ -4,6 +4,8 @@ import com.jswarm.adapter.lc4j.ExternalToolExecutor;
 import com.jswarm.core.ProtocolLimits;
 import com.jswarm.core.RouteDeniedException;
 import com.jswarm.core.SwarmException;
+import com.jswarm.spi.run.RunScope;
+import com.jswarm.spi.run.RunScopeChecks;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
@@ -96,12 +98,14 @@ public final class ToolCallBatchProcessor {
             }
             String result;
             try {
+                RunScopeChecks.beforeToolCall(RunScope.current());
                 result = exec.execute(call);
             } catch (RuntimeException e) {
                 result = "Jswarm recovery: tool '" + call.name()
                         + "' failed. Please answer directly or try another available tool.";
             }
             result = ProtocolLimits.truncateResult(result);
+            RunScopeChecks.recordToolResultBytes(RunScope.current(), result);
             if (onToolResult != null) {
                 onToolResult.accept(call.name(), result);
             }
@@ -137,11 +141,14 @@ public final class ToolCallBatchProcessor {
         for (ToolExecutionRequest call : calls) {
             String result;
             try {
+                RunScopeChecks.beforeToolCall(RunScope.current());
                 result = exec.execute(call);
             } catch (RuntimeException e) {
                 result = "Jswarm recovery: tool '" + call.name() + "' failed.";
             }
-            subMessages.add(ToolExecutionResultMessage.from(call, ProtocolLimits.truncateResult(result)));
+            result = ProtocolLimits.truncateResult(result);
+            RunScopeChecks.recordToolResultBytes(RunScope.current(), result);
+            subMessages.add(ToolExecutionResultMessage.from(call, result));
         }
         return new Outcome.Continue();
     }

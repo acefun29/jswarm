@@ -17,6 +17,9 @@ import com.jswarm.core.Swarm;
 import com.jswarm.core.SwarmContext;
 import com.jswarm.core.SwarmEvent;
 import com.jswarm.core.SwarmException;
+import com.jswarm.spi.bridge.SwarmContextBridge;
+import com.jswarm.spi.run.RunScope;
+import com.jswarm.spi.run.RunScopeChecks;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
@@ -71,6 +74,12 @@ public final class SwarmFilter {
             ExternalToolExecutor swarmFallback, SwarmRunOptions options) {
         RouteAuthorization.authorizeDelegate(swarm, sourceAgentId, targetId);
         JAgent target = requireJAgent(swarm.getAgent(targetId));
+        RunScope parentScope = RunScope.current();
+        SwarmContextBridge.ScopeBinding delegateBinding = null;
+        if (parentScope != null) {
+            RunScope delegateScope = RunScopeChecks.beginDelegate(parentScope, targetId);
+            delegateBinding = SwarmContextBridge.bind(delegateScope);
+        }
         SwarmContext context = SwarmContext.current();
 
         List<ChatMessage> subMessages = new ArrayList<>();
@@ -90,6 +99,7 @@ public final class SwarmFilter {
 
         try {
             for (int turn = 0; turn < options.maxTurns(); turn++) {
+                RunScopeChecks.beforeTurn(RunScope.current());
                 ChatRequest subRequest = ChatRequest.builder()
                         .messages(subMessages)
                         .toolSpecifications(subTools)
@@ -142,6 +152,10 @@ public final class SwarmFilter {
                 }
             }
             throw e;
+        } finally {
+            if (delegateBinding != null) {
+                SwarmContextBridge.restore(delegateBinding);
+            }
         }
     }
 
@@ -170,6 +184,12 @@ public final class SwarmFilter {
             Consumer<SwarmEvent> sink) {
         RouteAuthorization.authorizeDelegate(swarm, sourceAgentId, targetId);
         JAgent target = requireJAgent(swarm.getAgent(targetId));
+        RunScope parentScope = RunScope.current();
+        SwarmContextBridge.ScopeBinding delegateBinding = null;
+        if (parentScope != null) {
+            RunScope delegateScope = RunScopeChecks.beginDelegate(parentScope, targetId);
+            delegateBinding = SwarmContextBridge.bind(delegateScope);
+        }
         SwarmContext context = SwarmContext.current();
 
         List<ChatMessage> subMessages = new ArrayList<>();
@@ -189,6 +209,7 @@ public final class SwarmFilter {
 
         try {
             for (int turn = 0; turn < options.maxTurns(); turn++) {
+                RunScopeChecks.beforeTurn(RunScope.current());
                 ChatRequest subRequest = ChatRequest.builder()
                         .messages(subMessages)
                         .toolSpecifications(subTools)
@@ -242,6 +263,10 @@ public final class SwarmFilter {
                 }
             }
             throw e;
+        } finally {
+            if (delegateBinding != null) {
+                SwarmContextBridge.restore(delegateBinding);
+            }
         }
     }
 

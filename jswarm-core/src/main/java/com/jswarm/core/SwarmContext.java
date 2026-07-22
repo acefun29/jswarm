@@ -23,6 +23,10 @@ public final class SwarmContext {
         }
     }
 
+    /**
+     * @deprecated Prefer {@link com.jswarm.spi.run.RunScope#current()} via {@link com.jswarm.spi.bridge.SwarmContextBridge}.
+     */
+    @Deprecated
     public static SwarmContext current() {
         return CURRENT.get();
     }

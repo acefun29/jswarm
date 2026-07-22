@@ -2,7 +2,9 @@ package com.jswarm.adapter.springai.invoke;
 
 import com.jswarm.adapter.springai.JAgent;
 import com.jswarm.core.SwarmContext;
-import com.jswarm.core.SwarmException;
+import com.jswarm.spi.error.SwarmErrorMapper;
+import com.jswarm.spi.run.RunScope;
+import com.jswarm.spi.run.RunScopeChecks;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 
@@ -23,14 +25,14 @@ public final class ChatInvoker {
     }
 
     public static ChatResponse invoke(JAgent agent, Prompt prompt, Duration timeout) {
+        RunScope scope = RunScope.current();
+        RunScopeChecks.beforeModelCall(scope);
+        Duration effectiveTimeout = RunScopeChecks.effectiveModelTimeout(scope, timeout);
         SwarmContext captured = SwarmContext.current();
         try {
-            if (timeout != null) {
-                return withTimeout(agent, prompt, timeout, captured);
-            }
-            return agent.model().call(prompt);
+            return withTimeout(agent, prompt, effectiveTimeout, captured);
         } catch (RuntimeException e) {
-            throw new SwarmException("LLM call failed: " + e.getMessage(), e);
+            throw SwarmErrorMapper.toRuntimeException(e);
         }
     }
 
@@ -54,13 +56,15 @@ public final class ChatInvoker {
             return future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
             future.cancel(true);
-            throw new SwarmException("LLM call timed out after " + timeout.toMillis() + "ms", e);
+            throw SwarmErrorMapper.toRuntimeException(e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             future.cancel(true);
-            throw new SwarmException("LLM call was interrupted", e);
+            throw SwarmErrorMapper.toRuntimeException(e);
         } catch (CancellationException | ExecutionException e) {
-            throw new SwarmException("LLM call failed: " + e.getMessage(), e);
+            future.cancel(true);
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
+            throw SwarmErrorMapper.toRuntimeException(cause);
         }
     }
 }

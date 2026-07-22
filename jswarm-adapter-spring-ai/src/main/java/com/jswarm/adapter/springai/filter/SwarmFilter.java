@@ -15,6 +15,9 @@ import com.jswarm.core.Swarm;
 import com.jswarm.core.SwarmContext;
 import com.jswarm.core.SwarmEvent;
 import com.jswarm.core.SwarmException;
+import com.jswarm.spi.bridge.SwarmContextBridge;
+import com.jswarm.spi.run.RunScope;
+import com.jswarm.spi.run.RunScopeChecks;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -104,6 +107,12 @@ public final class SwarmFilter {
                                             SwarmRunOptions options,
                                             Consumer<SwarmEvent> sink,
                                             Function<Prompt, AssistantMessage> llmCall) {
+        RunScope parentScope = RunScope.current();
+        SwarmContextBridge.ScopeBinding delegateBinding = null;
+        if (parentScope != null) {
+            RunScope delegateScope = RunScopeChecks.beginDelegate(parentScope, target.id());
+            delegateBinding = SwarmContextBridge.bind(delegateScope);
+        }
         SwarmContext ctx = SwarmContext.current();
 
         List<Message> subMessages = new ArrayList<>();
@@ -121,6 +130,7 @@ public final class SwarmFilter {
             ExternalToolExecutor subExec = ToolExecutionMerger.merge(target.toolExecutor(), swarmFallback);
 
             for (int turn = 0; turn < options.maxTurns(); turn++) {
+                RunScopeChecks.beforeTurn(RunScope.current());
                 ToolCallingChatOptions chatOptions = ToolCallingChatOptions.builder()
                         .toolCallbacks(subTools)
                         .build();
@@ -162,6 +172,10 @@ public final class SwarmFilter {
                 e.addSuppressed(hookEx);
             }
             throw e;
+        } finally {
+            if (delegateBinding != null) {
+                SwarmContextBridge.restore(delegateBinding);
+            }
         }
     }
 

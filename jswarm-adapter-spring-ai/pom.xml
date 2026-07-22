@@ -22,6 +22,11 @@
             <artifactId>jswarm-core</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>com.jswarm</groupId>
+            <artifactId>jswarm-spi</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.ai</groupId>
