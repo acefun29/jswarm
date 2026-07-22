@@ -287,6 +287,7 @@ Swarm 级 ExternalToolExecutor: auditLog
 - `RunScope` / `RunBudget`：父子 run 共享预算、截止时间与取消信号
 - `CanonicalMessage` / `ModelGateway`：隔离 provider SDK 的消息与模型契约
 - `RunEngine` / `RunState` / `RunEvent`：统一 route、lifecycle、recovery 与 terminal 顺序
+- `ToolDescriptor` / `ToolRegistry`：注册快照、scope 授权、幂等、副作用、结果大小和安全审计预览
 
 ### jswarm-adapter-langchain4j
 
@@ -299,6 +300,8 @@ Swarm 级 ExternalToolExecutor: auditLog
 - `SwarmRunner`：共享 `RunEngine` 的兼容 facade
 - `SwarmRunOptions`：`maxTurns`、错误恢复、`modelTimeout`
 - `ExternalToolExecutor`：Swarm 级工具回落
+
+工具执行迁移规则：`ExternalToolExecutor` 只执行已注册且模型可见的工具。模型猜测出的未注册名称不会再进入 fallback；请通过 `JAgent.builder().tools(...)`、`fromTools(...)` 或 provider-specific descriptor bridge 注册工具，再将旧 executor 作为执行实现。
 
 ### jswarm-adapter-spring-ai
 

@@ -36,6 +36,7 @@ Runtime 统一决定 route、lifecycle、recovery 与 terminal 顺序。Adapter 
 | 能力 | 状态 | 说明 |
 |------|------|------|
 | Canonical SPI / 共享 `RunEngine` | **稳定** | 两 Adapter 共用状态机并执行同一 TCK |
+| Canonical `ToolDescriptor` / `ToolRegistry` | **稳定** | 工具必须先注册并通过 scope 授权；旧 executor 仅作为已注册工具的实现 |
 | 同步 `SwarmRunner.run()` | **稳定** | 两 adapter |
 | `SwarmRunner.runStreaming()` | **稳定** | 两 adapter 均有实现与单元测试 |
 | LangChain4j `JAgent.fromAiService` | **稳定** | 有测试覆盖 |

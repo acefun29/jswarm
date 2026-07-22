@@ -3,6 +3,7 @@ package com.jswarm.adapter.lc4j.run;
 import com.jswarm.adapter.lc4j.DefaultJAgent;
 import com.jswarm.adapter.lc4j.ExternalToolExecutor;
 import com.jswarm.adapter.lc4j.JAgent;
+import com.jswarm.adapter.lc4j.DefaultJAgent;
 import com.jswarm.adapter.lc4j.filter.SwarmFilter;
 import com.jswarm.adapter.lc4j.filter.ToolCallBatchProcessor;
 import com.jswarm.core.Swarm;
@@ -10,12 +11,14 @@ import com.jswarm.core.SwarmContext;
 import com.jswarm.core.SwarmEvent;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
+import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
 import org.junit.jupiter.api.AfterEach;
@@ -79,7 +82,9 @@ class ToolCallProtocolTest {
             return req.name() + "-result";
         };
 
-        Swarm swarm = Swarm.create("test").agent(agent("a", "hi", model)).entry("a").build();
+        Swarm swarm = Swarm.create("test")
+                .agent(explicitExternalAgent("a", "hi", model, exec, "alpha", "beta"))
+                .entry("a").build();
         SwarmRunner runner = SwarmRunner.create(swarm, SwarmRunOptions.defaults(), exec);
         SwarmRunner.RunResult result = runner.runWithHistory("hi", null, "a", new SwarmContext(), false);
 
@@ -297,6 +302,26 @@ class ToolCallProtocolTest {
                 .instructions(instructions)
                 .model(model)
                 .build();
+    }
+
+    private static JAgent explicitExternalAgent(
+            String id, String instructions, ChatModel model,
+            ExternalToolExecutor executor, String... names) {
+        List<ToolSpecification> specifications = List.of(names).stream()
+                .map(name -> ToolSpecification.builder()
+                        .name(name)
+                        .description(name)
+                        .parameters(JsonObjectSchema.builder().build())
+                        .build())
+                .toList();
+        return new ExplicitAgent(id, instructions, model, specifications, executor);
+    }
+
+    private static final class ExplicitAgent extends DefaultJAgent {
+        private ExplicitAgent(String id, String instructions, ChatModel model,
+                              List<ToolSpecification> specifications, ExternalToolExecutor executor) {
+            super(id, "agent-" + id, "agent " + id, instructions, model, specifications, executor);
+        }
     }
 
     private static JAgent lifecycleAgent(String id, String instructions,

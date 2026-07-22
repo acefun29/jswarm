@@ -4,6 +4,7 @@ package com.jswarm.runtime.agent;
 import com.jswarm.spi.lifecycle.ModelGateway;
 import com.jswarm.spi.lifecycle.ToolInvoker;
 import com.jswarm.spi.message.ToolDescriptor;
+import com.jswarm.runtime.tool.ToolRegistry;
 
 import java.util.List;
 import java.util.Objects;
@@ -16,6 +17,7 @@ public final class AgentRuntime {
     private final List<ToolDescriptor> tools;
     private final boolean streamingSupported;
     private final boolean instructionsConfigured;
+    private final ToolRegistry registry;
 
     public AgentRuntime(
             String agentId,
@@ -33,6 +35,7 @@ public final class AgentRuntime {
         this.tools = tools != null ? List.copyOf(tools) : List.of();
         this.streamingSupported = streamingSupported;
         this.instructionsConfigured = instructionsConfigured;
+        this.registry = ToolRegistry.build(agentId, this.tools, toolInvoker);
     }
 
     public String agentId() {
@@ -57,5 +60,9 @@ public final class AgentRuntime {
 
     public boolean instructionsConfigured() {
         return instructionsConfigured;
+    }
+
+    public ToolRegistry registry() {
+        return registry;
     }
 }

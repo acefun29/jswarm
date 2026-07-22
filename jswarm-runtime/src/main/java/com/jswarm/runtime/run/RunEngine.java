@@ -159,19 +159,24 @@ public final class RunEngine {
     }
 
     private void executeExternalTool(Frame frame, AgentRuntime runtime, ToolCall call) {
+        ToolDescriptor descriptor = runtime.registry().descriptor(call.name());
         frame.dispatcher.emit(frame.scope, frame.turn, frame.agentId, call.id(),
-                RunEventType.TOOL_CALLED, Map.of("toolName", call.name(), "arguments", call.arguments()));
+                RunEventType.TOOL_CALLED, Map.of(
+                        "toolName", call.name(),
+                        "toolId", descriptor != null ? descriptor.toolId() : "unknown",
+                        "argumentsPreview", safePreview(call.arguments(), descriptor),
+                        "sensitivity", descriptor != null ? descriptor.sensitivity().name() : "UNKNOWN"));
         String output;
         try {
-            RunScopeChecks.beforeToolCall(frame.scope);
-            if (runtime.toolInvoker() == null) {
-                throw error(SwarmErrorCode.TOOL_FAILURE,
-                        "No tool invoker is available", "toolName", call.name());
-            }
-            ToolResult result = runtime.toolInvoker().execute(
+            ToolResult result = runtime.registry().invoke(
                     new ToolInvocation(call.id(), call.name(), call.arguments()),
                     new ToolContext(frame.scope, frame.scope.deadline(), frame.scope.cancellation()));
             output = result.output();
+            if (!result.successful()) {
+                frame.dispatcher.emit(frame.scope, frame.turn, frame.agentId, call.id(),
+                        RunEventType.RECOVERY,
+                        Map.of("reason", result.errorCode().name(), "toolName", call.name()));
+            }
         } catch (RuntimeException failure) {
             output = ToolBatchPlanner.externalFailure(call.name(), false);
             frame.dispatcher.emit(frame.scope, frame.turn, frame.agentId, call.id(),
@@ -181,7 +186,12 @@ public final class RunEngine {
         RunScopeChecks.recordToolResultBytes(frame.scope, output);
         frame.messages.add(CanonicalMessage.toolResult(call.id(), call.name(), output));
         frame.dispatcher.emit(frame.scope, frame.turn, frame.agentId, call.id(),
-                RunEventType.TOOL_RESULT, Map.of("toolName", call.name(), "result", output));
+                RunEventType.TOOL_RESULT, Map.of(
+                        "toolName", call.name(),
+                        "resultPreview", safePreview(output, descriptor),
+                        "sensitivity", descriptor != null ? descriptor.sensitivity().name() : "UNKNOWN",
+                        "truncated", Boolean.toString(descriptor != null
+                                && output.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 256)));
     }
 
     private void handleHandoff(Frame frame, String targetAgentId) {
@@ -349,6 +359,17 @@ public final class RunEngine {
     private void recover(Frame frame, String reason) {
         frame.dispatcher.emit(frame.scope, frame.turn, frame.agentId, null,
                 RunEventType.RECOVERY, Map.of("reason", reason));
+    }
+
+    private static String safePreview(String value, ToolDescriptor descriptor) {
+        if (descriptor != null && descriptor.sensitivity()
+                == com.jswarm.spi.message.ToolSensitivity.SECRET) {
+            return "<redacted>";
+        }
+        if (value == null) {
+            return "";
+        }
+        return value.length() <= 256 ? value : value.substring(0, 256);
     }
 
     private void transition(Frame frame, RunState next) {

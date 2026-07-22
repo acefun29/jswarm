@@ -17,6 +17,9 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.model.StreamingChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.definition.ToolDefinition;
+import org.springframework.ai.tool.metadata.ToolMetadata;
 import reactor.core.publisher.Flux;
 
 import java.util.ArrayList;
@@ -89,7 +92,9 @@ class ToolCallProtocolTest {
             return req.name() + "-result";
         };
 
-        Swarm swarm = Swarm.create("s").agent(agent("a", "hi", model)).entry("a").build();
+        Swarm swarm = Swarm.create("s")
+                .agent(explicitExternalAgent("a", "hi", model, exec, "alpha", "beta"))
+                .entry("a").build();
         SwarmRunner runner = SwarmRunner.create(swarm, SwarmRunOptions.defaults(), exec);
         SwarmRunner.RunResult result = runner.runWithHistory("hi", null, "a", new SwarmContext(), false);
 
@@ -307,6 +312,42 @@ class ToolCallProtocolTest {
                 .instructions(instructions)
                 .model(model)
                 .build();
+    }
+
+    private static JAgent explicitExternalAgent(
+            String id, String instructions, ChatModel model,
+            ExternalToolExecutor executor, String... names) {
+        List<ToolCallback> callbacks = new ArrayList<>();
+        for (String name : names) {
+            callbacks.add(new ToolCallback() {
+                    private final ToolDefinition definition = ToolDefinition.builder()
+                            .name(name).description(name).inputSchema("{}").build();
+
+                    @Override
+                    public ToolDefinition getToolDefinition() {
+                        return definition;
+                    }
+
+                    @Override
+                    public ToolMetadata getToolMetadata() {
+                        return ToolMetadata.builder().build();
+                    }
+
+                    @Override
+                    public String call(String toolInput) {
+                        return "unused";
+                    }
+                });
+        }
+        return new JAgent() {
+            @Override public String id() { return id; }
+            @Override public String name() { return "agent-" + id; }
+            @Override public String description() { return "agent " + id; }
+            @Override public String instructions() { return instructions; }
+            @Override public ChatModel model() { return model; }
+            @Override public List<ToolCallback> externalTools() { return List.copyOf(callbacks); }
+            @Override public ExternalToolExecutor toolExecutor() { return executor; }
+        };
     }
 
     private static ChatModel stubModel(String reply) {

@@ -285,6 +285,7 @@ Session data is persisted in `data/showcase.db` (gitignored, auto-created locall
 - `RunScope` / `RunBudget`: shared parent-child budget, deadline, and cancellation
 - `CanonicalMessage` / `ModelGateway`: provider-neutral message and model contracts
 - `RunEngine` / `RunState` / `RunEvent`: shared route, lifecycle, recovery, and terminal ordering
+- `ToolDescriptor` / `ToolRegistry`: registration snapshots, scope authorization, idempotency, side effects, result limits, and safe audit previews
 
 ### jswarm-adapter-langchain4j
 
@@ -297,6 +298,8 @@ Session data is persisted in `data/showcase.db` (gitignored, auto-created locall
 - `SwarmRunner`: compatibility facade over the shared `RunEngine`
 - `SwarmRunOptions`: `maxTurns`, error recovery, `modelTimeout`
 - `ExternalToolExecutor`: swarm-level tool fallback
+
+Tool execution migration: `ExternalToolExecutor` only executes registered tools that are visible to the model. Guessed or unregistered names no longer enter an arbitrary fallback path. Register tools with `JAgent.builder().tools(...)`, `fromTools(...)`, or a provider descriptor bridge, then use the legacy executor as the implementation.
 
 ### jswarm-adapter-spring-ai
 
