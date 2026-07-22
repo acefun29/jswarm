@@ -3,6 +3,8 @@ package com.jswarm.adapter.lc4j.run;
 import com.jswarm.adapter.lc4j.DefaultJAgent;
 import com.jswarm.adapter.lc4j.ExternalToolExecutor;
 import com.jswarm.adapter.lc4j.JAgent;
+import com.jswarm.adapter.lc4j.filter.SwarmFilter;
+import com.jswarm.adapter.lc4j.filter.ToolCallBatchProcessor;
 import com.jswarm.core.Swarm;
 import com.jswarm.core.SwarmContext;
 import com.jswarm.core.SwarmEvent;
@@ -209,6 +211,25 @@ class ToolCallProtocolTest {
                 .findFirst()
                 .orElseThrow();
         assertEquals("sunny", completed.finalText());
+    }
+
+    @Test
+    @SuppressWarnings("removal")
+    void legacyBatchProcessorShouldRemainBehaviorCompatible() {
+        Swarm swarm = Swarm.create("test")
+                .agent(agent("a", "source", stubModel("unused")))
+                .agent(agent("b", "target", stubModel("unused")))
+                .entry("a")
+                .handoff("a", "b")
+                .build();
+        List<ChatMessage> messages = new ArrayList<>();
+        AiMessage assistant = toolMsg("handoff", "{\"target\":\"b\"}");
+
+        ToolCallBatchProcessor.Outcome outcome = ToolCallBatchProcessor.process(
+                new SwarmFilter(swarm), "a", messages, assistant, request -> "unused", null, null);
+
+        assertInstanceOf(ToolCallBatchProcessor.Outcome.Handoff.class, outcome);
+        assertEquals(2, messages.size());
     }
 
     private static void assertHistoryPaired(List<ChatMessage> history, String... callIds) {

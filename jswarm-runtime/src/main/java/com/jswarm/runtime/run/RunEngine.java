@@ -16,6 +16,7 @@ import com.jswarm.runtime.route.RouteDecision;
 import com.jswarm.runtime.state.RunState;
 import com.jswarm.runtime.state.RunStateMachine;
 import com.jswarm.runtime.tool.OrchestrationTools;
+import com.jswarm.runtime.tool.ToolBatchPlanner;
 import com.jswarm.spi.bridge.SwarmContextBridge;
 import com.jswarm.spi.context.ContextSnapshot;
 import com.jswarm.spi.error.SwarmError;
@@ -145,45 +146,16 @@ public final class RunEngine {
     }
 
     private RouteDecision processToolBatch(Frame frame, AgentRuntime runtime, List<ToolCall> calls) {
-        String protocolError = validateBatch(calls);
-        if (protocolError != null) {
-            appendBatchError(frame, calls, protocolError);
-            recover(frame, protocolError);
-            return new RouteDecision.Continue();
+        ToolBatchPlanner.Plan plan = ToolBatchPlanner.plan(
+                calls, frame.delegate, call -> decideRoute(frame.agentId, call));
+        frame.messages.addAll(plan.resultMessages());
+        if (plan.recoveryReason() != null) {
+            recover(frame, plan.recoveryReason());
         }
-
-        List<ToolCall> routing = calls.stream().filter(call -> OrchestrationTools.routing(call.name())).toList();
-        if (routing.size() > 1 || (!routing.isEmpty() && routing.size() != calls.size())) {
-            String message = "Jswarm: only one routing tool call is allowed per turn.";
-            appendBatchError(frame, calls, message);
-            recover(frame, message);
-            return new RouteDecision.Continue();
-        }
-        if (routing.size() == 1) {
-            ToolCall call = routing.get(0);
-            if (frame.delegate) {
-                String message = "Jswarm: routing tools are not allowed inside delegate sub-runs.";
-                frame.messages.add(CanonicalMessage.toolResult(call.id(), call.name(), message));
-                recover(frame, message);
-                return new RouteDecision.Continue();
-            }
-            RouteDecision decision = decideRoute(frame.agentId, call);
-            if (decision instanceof RouteDecision.Reject reject) {
-                frame.messages.add(CanonicalMessage.toolResult(call.id(), call.name(), reject.modelSafeMessage()));
-                recover(frame, reject.modelSafeMessage());
-                return new RouteDecision.Continue();
-            }
-            if (decision instanceof RouteDecision.Handoff handoff) {
-                frame.messages.add(CanonicalMessage.toolResult(call.id(), call.name(),
-                        "Jswarm: transferred to agent '" + handoff.targetAgentId() + "'."));
-            }
-            return decision;
-        }
-
-        for (ToolCall call : calls) {
+        for (ToolCall call : plan.externalCalls()) {
             executeExternalTool(frame, runtime, call);
         }
-        return new RouteDecision.Continue();
+        return plan.decision();
     }
 
     private void executeExternalTool(Frame frame, AgentRuntime runtime, ToolCall call) {
@@ -201,8 +173,7 @@ public final class RunEngine {
                     new ToolContext(frame.scope, frame.scope.deadline(), frame.scope.cancellation()));
             output = result.output();
         } catch (RuntimeException failure) {
-            output = "Jswarm recovery: tool '" + call.name()
-                    + "' failed. Please answer directly or try another available tool.";
+            output = ToolBatchPlanner.externalFailure(call.name(), false);
             frame.dispatcher.emit(frame.scope, frame.turn, frame.agentId, call.id(),
                     RunEventType.RECOVERY, Map.of("reason", "tool_failure", "toolName", call.name()));
         }
@@ -375,12 +346,6 @@ public final class RunEngine {
         return List.copyOf(tools);
     }
 
-    private void appendBatchError(Frame frame, List<ToolCall> calls, String message) {
-        for (ToolCall call : calls) {
-            frame.messages.add(CanonicalMessage.toolResult(call.id(), call.name(), message));
-        }
-    }
-
     private void recover(Frame frame, String reason) {
         frame.dispatcher.emit(frame.scope, frame.turn, frame.agentId, null,
                 RunEventType.RECOVERY, Map.of("reason", reason));
@@ -420,19 +385,6 @@ public final class RunEngine {
 
     private static SwarmErrorCode errorCode(RuntimeException failure) {
         return failure instanceof SwarmErrorException error ? error.code() : SwarmErrorCode.INTERNAL;
-    }
-
-    private static String validateBatch(List<ToolCall> calls) {
-        if (calls == null || calls.isEmpty()) {
-            return "Jswarm: tool call batch is empty.";
-        }
-        Set<String> ids = new HashSet<>();
-        for (ToolCall call : calls) {
-            if (!ids.add(call.id())) {
-                return "Jswarm: duplicate tool call id in the same batch.";
-            }
-        }
-        return null;
     }
 
     private static Map<String, AgentRuntime> validateAndSnapshot(Swarm swarm, RuntimeProvider provider) {

@@ -2,6 +2,8 @@ package com.jswarm.adapter.springai.run;
 
 import com.jswarm.adapter.springai.ExternalToolExecutor;
 import com.jswarm.adapter.springai.JAgent;
+import com.jswarm.adapter.springai.filter.SwarmFilter;
+import com.jswarm.adapter.springai.filter.ToolCallBatchProcessor;
 import com.jswarm.core.Swarm;
 import com.jswarm.core.SwarmContext;
 import com.jswarm.core.SwarmEvent;
@@ -225,6 +227,25 @@ class ToolCallProtocolTest {
                 .findFirst()
                 .orElseThrow();
         assertEquals("sunny", completed.finalText());
+    }
+
+    @Test
+    @SuppressWarnings("removal")
+    void legacyBatchProcessorShouldRemainBehaviorCompatible() {
+        Swarm swarm = Swarm.create("s")
+                .agent(agent("a", "source", stubModel("unused")))
+                .agent(agent("b", "target", stubModel("unused")))
+                .entry("a")
+                .handoff("a", "b")
+                .build();
+        List<Message> messages = new ArrayList<>();
+        AssistantMessage assistant = toolMsg("handoff", "{\"target\":\"b\"}");
+
+        ToolCallBatchProcessor.Outcome outcome = ToolCallBatchProcessor.process(
+                new SwarmFilter(swarm), "a", messages, assistant, call -> "unused", null, null);
+
+        assertInstanceOf(ToolCallBatchProcessor.Outcome.Handoff.class, outcome);
+        assertEquals(2, messages.size());
     }
 
     private static void assertHistoryPaired(List<Message> history, String... callIds) {
