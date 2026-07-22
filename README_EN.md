@@ -99,6 +99,8 @@ jswarm-examples-spring-ai Showcase web demo (Spring AI)
 | `jswarm-adapter-tck` | Shared compatibility fixtures executed by both adapters |
 | `jswarm-adapter-langchain4j` | LangChain4j gateway, codecs, tool bridge, and compatible `SwarmRunner` facade |
 | `jswarm-adapter-spring-ai` | Spring AI gateway, codecs, tool bridge, and compatible `SwarmRunner` facade; includes experimental autoconfiguration |
+| `jswarm-observability-micrometer` | Optional Micrometer advisors, redacted logging, and call metrics |
+| `jswarm-spring-boot-starter` | Optional Spring Boot auto-configuration, property validation, and single-Swarm conditions |
 | `jswarm-examples` | Web showcase application based on LangChain4j |
 | `jswarm-examples-spring-ai` | Web showcase application based on Spring AI + Spring Boot + SSE |
 
@@ -307,8 +309,10 @@ Tool execution migration: `ExternalToolExecutor` only executes registered tools 
 
 - `JAgent.builder()` / `fromTools()` / `decorate()`: build and bridge (stable)
 - `SwarmRunner.run()` / `runStreaming()`: sync and streaming (stable)
+- `RunHandle`: streaming completion, cancellation, and canonical event snapshot
 - Spring AI `fromAiService()`: **not implemented** (throws; use `builder` / `fromTools`)
-- `JswarmAutoConfiguration`, `SwarmLoggingAdvisor` / `SwarmMetricsAdvisor`: **experimental** (Boot 4.0.7 matrix; full governance in plan-06)
+- `jswarm-spring-boot-starter` `JswarmAutoConfiguration`: optional Boot 4.0.7 auto-configuration
+- `jswarm-observability-micrometer` `SwarmLoggingAdvisor` / `SwarmMetricsAdvisor`: optional and redacted by default
 
 ### Examples Modules
 
@@ -356,7 +360,7 @@ The examples modules require a live LLM and are typically skipped in CI. Provide
 - Lifecycle hooks, JAgent extension paths (builder / decorate; LC4j `fromAiService`)
 - Dynamic instructions, error recovery
 - `runStreaming` on both adapters and Spring AI Showcase SSE
-- Spring Boot AutoConfiguration (experimental, Spring AI adapter only)
+- Spring Boot starter and optional Micrometer observability modules
 - Canonical SPI, shared Runtime state machine, and cross-adapter TCK
 
 **Planned**

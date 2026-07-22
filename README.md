@@ -99,6 +99,8 @@ jswarm-examples-spring-ai 基于 Spring AI 的 Showcase Web 演示
 | `jswarm-adapter-tck` | 两个 Adapter 共用的兼容性测试夹具 |
 | `jswarm-adapter-langchain4j` | LangChain4j gateway、codec、工具桥接与兼容 `SwarmRunner` facade |
 | `jswarm-adapter-spring-ai` | Spring AI gateway、codec、工具桥接与兼容 `SwarmRunner` facade；含实验性自动配置 |
+| `jswarm-observability-micrometer` | 可选的 Micrometer Advisor、脱敏日志与调用指标 |
+| `jswarm-spring-boot-starter` | 可选 Spring Boot auto-configuration、properties 校验与单 Swarm 条件 |
 | `jswarm-examples` | 基于 LangChain4j 的智能客服 Web 演示场景 |
 | `jswarm-examples-spring-ai` | 基于 Spring AI + Spring Boot + SSE 流式的智能客服 Web 演示场景 |
 
@@ -309,8 +311,10 @@ Swarm 级 ExternalToolExecutor: auditLog
 
 - `JAgent.builder()` / `fromTools()` / `decorate()`：构建与桥接（稳定）
 - `SwarmRunner.run()` / `runStreaming()`：同步与流式（稳定）
+- `RunHandle`：流式完成、取消与 canonical event 快照
 - Spring AI `fromAiService()`：**未实现**（抛异常，请用 `builder` / `fromTools`）
-- `JswarmAutoConfiguration`、`SwarmLoggingAdvisor` / `SwarmMetricsAdvisor`：**实验**（依赖 Boot 4.0.7 矩阵，完整治理见计划-06）
+- `jswarm-spring-boot-starter` 的 `JswarmAutoConfiguration`：可选 Boot 4.0.7 自动配置
+- `jswarm-observability-micrometer` 的 `SwarmLoggingAdvisor` / `SwarmMetricsAdvisor`：可选且默认脱敏
 
 ### 示例模块
 

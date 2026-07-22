@@ -31,6 +31,8 @@
         <module>jswarm-adapter-tck</module>
         <module>jswarm-adapter-langchain4j</module>
         <module>jswarm-adapter-spring-ai</module>
+        <module>jswarm-observability-micrometer</module>
+        <module>jswarm-spring-boot-starter</module>
         <module>jswarm-examples</module>
         <module>jswarm-examples-spring-ai</module>
     </modules>

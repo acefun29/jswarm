@@ -24,9 +24,10 @@
 | `jswarm-adapter-tck` | 两个 Adapter 共用的兼容性测试夹具 | 是（测试支持） |
 | `jswarm-adapter-langchain4j` | LangChain4j gateway、codec、tool bridge 与兼容 facade | 是 |
 | `jswarm-adapter-spring-ai` | Spring AI gateway、codec、tool bridge 与兼容 facade（含实验性 Boot autoconfig） | 是 |
+| `jswarm-observability-micrometer` | 可选 Micrometer、脱敏日志与 Advisor | 是（可选） |
+| `jswarm-spring-boot-starter` | 可选 Boot auto-configuration 与 properties | 是（可选） |
 | `jswarm-examples` | LC4j Showcase | 是（示例，非正式库消费者依赖） |
 | `jswarm-examples-spring-ai` | Spring AI Showcase | 是（示例） |
-| `jswarm-spring-boot-starter` | 计划从 adapter 拆出 | 否（未创建） |
 | `compliance-swarm` | 合规旁路示例 | 否（不在父 `<modules>`，非正式坐标） |
 
 Runtime 统一决定 route、lifecycle、recovery 与 terminal 顺序。Adapter 不得复制模型无关主循环，只实现 provider bridge；旧 `SwarmRunner` 保持公开 facade 兼容。
@@ -42,8 +43,8 @@ Runtime 统一决定 route、lifecycle、recovery 与 terminal 顺序。Adapter 
 | LangChain4j `JAgent.fromAiService` | **稳定** | 有测试覆盖 |
 | Spring AI `JAgent.fromAiService` | **未实现** | 抛 `UnsupportedOperationException`；不得写成稳定能力 |
 | Spring AI `JAgent.fromTools` / `builder` | **稳定** | |
-| `SwarmLoggingAdvisor` / `SwarmMetricsAdvisor` | **实验** | 依赖 Boot 4 矩阵；完整治理归计划-06 |
-| `JswarmAutoConfiguration` | **实验** | 同上 |
+| `SwarmLoggingAdvisor` / `SwarmMetricsAdvisor` | **稳定（可选）** | `jswarm-observability-micrometer`，Boot 4.0.7 矩阵 |
+| `JswarmAutoConfiguration` | **稳定（可选）** | `jswarm-spring-boot-starter`，单 Swarm 条件 |
 | Swarm 级 `ExternalToolExecutor` | **稳定** | |
 | 跨 `run()` 调用的多轮 history / 恢复 | **应用自管** | 框架单次 `run()` 不持久化会话 |
 | JDK 17+ | **稳定** | 编译 `release=17` |

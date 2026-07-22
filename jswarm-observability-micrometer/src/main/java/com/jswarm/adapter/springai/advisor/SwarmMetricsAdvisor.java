@@ -1,4 +1,4 @@
-// Advisor 集成 — Micrometer 指标上报
+// Spring AI Micrometer 指标 Advisor
 package com.jswarm.adapter.springai.advisor;
 
 import io.micrometer.core.instrument.MeterRegistry;
@@ -19,18 +19,17 @@ public class SwarmMetricsAdvisor implements BaseAdvisor {
 
     @Override
     public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
-        return request.mutate()
-                .context("swarm_start_time", System.nanoTime())
-                .build();
+        return request.mutate().context("jswarm_start_time", System.nanoTime()).build();
     }
 
     @Override
     public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) {
-        Long startTime = (Long) response.context().get("swarm_start_time");
-        if (startTime != null) {
-            long elapsedMs = (System.nanoTime() - startTime) / 1_000_000;
-            meterRegistry.timer("jswarm.llm.call.duration").record(elapsedMs, TimeUnit.MILLISECONDS);
-            meterRegistry.counter("jswarm.llm.call.count").increment();
+        Object started = response.context().get("jswarm_start_time");
+        if (started instanceof Long value) {
+            long elapsed = (System.nanoTime() - value) / 1_000_000;
+            meterRegistry.timer("jswarm.llm.call.duration", "status", "success")
+                    .record(elapsed, TimeUnit.MILLISECONDS);
+            meterRegistry.counter("jswarm.llm.call.count", "status", "success").increment();
         }
         return response;
     }

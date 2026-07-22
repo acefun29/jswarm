@@ -3,56 +3,44 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-
     <parent>
         <groupId>com.jswarm</groupId>
         <artifactId>jswarm-parent</artifactId>
         <version>1.0.0-SNAPSHOT</version>
     </parent>
-
-    <artifactId>jswarm-adapter-spring-ai</artifactId>
-    <packaging>jar</packaging>
-
-    <name>Jswarm Adapter Spring AI</name>
-    <description>Spring AI 2.0.x adapter for Jswarm agent orchestration framework</description>
-
+    <artifactId>jswarm-spring-boot-starter</artifactId>
+    <name>Jswarm Spring Boot Starter</name>
+    <description>Optional Spring Boot auto-configuration for Jswarm</description>
     <dependencies>
         <dependency>
             <groupId>com.jswarm</groupId>
-            <artifactId>jswarm-core</artifactId>
+            <artifactId>jswarm-adapter-spring-ai</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>com.jswarm</groupId>
-            <artifactId>jswarm-spi</artifactId>
+            <artifactId>jswarm-observability-micrometer</artifactId>
             <version>${project.version}</version>
+            <optional>true</optional>
         </dependency>
         <dependency>
-            <groupId>com.jswarm</groupId>
-            <artifactId>jswarm-runtime</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-model</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-client-chat</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-configuration-processor</artifactId>
+            <optional>true</optional>
         </dependency>
-
         <dependency>
-            <groupId>org.mockito</groupId>
-            <artifactId>mockito-core</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-test</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>com.jswarm</groupId>
-            <artifactId>jswarm-adapter-tck</artifactId>
-            <version>${project.version}</version>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
             <scope>test</scope>
         </dependency>
-
     </dependencies>
 </project>
