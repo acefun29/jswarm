@@ -10,9 +10,13 @@ public final class SwarmContextBridge {
     }
 
     public static ScopeBinding bind(RunScope scope) {
+        return bind(scope, null);
+    }
+
+    public static ScopeBinding bind(RunScope scope, SwarmContext context) {
         SwarmContext previousContext = SwarmContext.current();
         RunScope previousScope = RunScope.current();
-        SwarmContext bridged = scope.toSwarmContext();
+        SwarmContext bridged = context != null ? context : scope.toSwarmContext();
         SwarmContext.set(bridged);
         RunScope.bind(scope);
         return new ScopeBinding(previousContext, previousScope);

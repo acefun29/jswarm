@@ -1,7 +1,13 @@
 // Canonical 工具调用
 package com.jswarm.spi.message;
 
-public record ToolCall(String id, String name, String arguments) {
+import java.util.Map;
+
+public record ToolCall(
+        String id,
+        String name,
+        String arguments,
+        Map<String, String> parsedArguments) {
 
     public ToolCall {
         if (id == null || id.isBlank()) {
@@ -11,5 +17,14 @@ public record ToolCall(String id, String name, String arguments) {
             throw new IllegalArgumentException("tool call name must not be blank");
         }
         arguments = arguments != null ? arguments : "{}";
+        parsedArguments = parsedArguments != null ? Map.copyOf(parsedArguments) : Map.of();
+    }
+
+    public ToolCall(String id, String name, String arguments) {
+        this(id, name, arguments, Map.of());
+    }
+
+    public String argument(String name) {
+        return parsedArguments.get(name);
     }
 }

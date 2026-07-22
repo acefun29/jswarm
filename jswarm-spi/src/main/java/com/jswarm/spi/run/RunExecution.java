@@ -21,7 +21,7 @@ public final class RunExecution {
             SwarmContext context,
             Callable<T> action) {
         RunScope scope = RunScopeFactory.from(swarm, startAgentId, limits, policy, context);
-        SwarmContextBridge.ScopeBinding binding = SwarmContextBridge.bind(scope);
+        SwarmContextBridge.ScopeBinding binding = SwarmContextBridge.bind(scope, context);
         try {
             return action.call();
         } catch (RuntimeException e) {

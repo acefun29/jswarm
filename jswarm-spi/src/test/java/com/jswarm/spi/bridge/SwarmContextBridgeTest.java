@@ -1,6 +1,7 @@
 package com.jswarm.spi.bridge;
 
 import com.jswarm.core.SwarmContext;
+import com.jswarm.spi.context.ContextSnapshot;
 import com.jswarm.spi.id.AgentId;
 import com.jswarm.spi.id.SwarmVersion;
 import com.jswarm.spi.run.RunRequest;
@@ -37,5 +38,23 @@ class SwarmContextBridgeTest {
         assertNull(RunScope.current());
 
         SwarmContext.clear();
+    }
+
+    @Test
+    void shouldBindProvidedCompatibilityContext() {
+        SwarmContext context = new SwarmContext().put("value", "before");
+        RunRequest request = RunRequest.builder()
+                .swarmVersion(SwarmVersion.of("test"))
+                .contextSnapshot(ContextSnapshot.fromMap(context.asMap()))
+                .build();
+        RunScope scope = RunScope.root(request);
+        SwarmContextBridge.ScopeBinding binding = SwarmContextBridge.bind(scope, context);
+        try {
+            assertSame(context, SwarmContext.current());
+            SwarmContext.current().put("value", "after");
+        } finally {
+            SwarmContextBridge.restore(binding);
+        }
+        assertEquals("after", context.get("value"));
     }
 }

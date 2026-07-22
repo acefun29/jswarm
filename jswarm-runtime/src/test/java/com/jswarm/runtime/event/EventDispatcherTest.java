@@ -51,6 +51,8 @@ class EventDispatcherTest {
         assertEquals(200, events.size());
         assertEquals(200, events.stream().map(RunEvent::seq).distinct().count());
         assertEquals(200L, events.stream().mapToLong(RunEvent::seq).max().orElseThrow());
+        assertEquals(java.util.stream.LongStream.rangeClosed(1, 200).boxed().toList(),
+                events.stream().map(RunEvent::seq).toList());
     }
 
     private static RunScope scope() {

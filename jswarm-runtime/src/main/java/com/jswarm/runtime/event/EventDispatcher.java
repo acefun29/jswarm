@@ -25,7 +25,7 @@ public final class EventDispatcher {
         this.clock = clock;
     }
 
-    public RunEvent emit(
+    public synchronized RunEvent emit(
             RunScope scope,
             int turn,
             String agentId,
@@ -49,7 +49,10 @@ public final class EventDispatcher {
                 Instant.now(clock),
                 type,
                 payload);
-        sink.accept(event);
+        try {
+            sink.accept(event);
+        } catch (RuntimeException ignored) {
+        }
         return event;
     }
 
