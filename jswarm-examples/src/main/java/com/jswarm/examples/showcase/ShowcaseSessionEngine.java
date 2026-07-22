@@ -1,4 +1,4 @@
-// 多轮会话示例；关键词强制路由仅为演示兜底，计划 07 删除
+// 只使用公开 SwarmRunner API 的多轮会话示例
 package com.jswarm.examples.showcase;
 
 import com.jswarm.adapter.lc4j.ExternalToolExecutor;
@@ -6,19 +6,13 @@ import com.jswarm.adapter.lc4j.run.ChatMessageCodec;
 import com.jswarm.adapter.lc4j.run.SwarmRunListener;
 import com.jswarm.adapter.lc4j.run.SwarmRunOptions;
 import com.jswarm.adapter.lc4j.run.SwarmRunner;
-import com.jswarm.core.Agent;
 import com.jswarm.core.Swarm;
 import com.jswarm.core.SwarmContext;
-import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.message.SystemMessage;
-import dev.langchain4j.data.message.UserMessage;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 public final class ShowcaseSessionEngine {
 
@@ -35,24 +29,19 @@ public final class ShowcaseSessionEngine {
         SwarmContext previous = SwarmContext.current();
         SwarmContext.set(session.context());
         try {
-            SwarmRunner runner = createRunner(collector);
-            List<ChatMessage> priorHistory = session.history().isEmpty()
-                    ? null
-                    : new ArrayList<>(ChatMessageCodec.forPersistence(session.history()));
-
-            SwarmRunner.RunResult result = runner.runWithHistory(
-                    userMessage,
-                    priorHistory,
-                    session.currentAgentId(),
-                    session.context(),
-                    session.entryHookFired());
+            SwarmRunner.RunResult result = SwarmRunner.create(
+                            swarm,
+                            SwarmRunOptions.builder().maxTurns(12).maxRecoveryAttempts(2).build(),
+                            swarmToolExecutor,
+                            showcaseListener(collector))
+                    .runWithHistory(
+                            userMessage,
+                            session.history().isEmpty() ? null
+                                    : ChatMessageCodec.forPersistence(session.history()),
+                            session.currentAgentId(),
+                            session.context(),
+                            session.entryHookFired());
             session.setEntryHookFired(true);
-
-            Optional<String> forcedTarget = resolveForcedHandoff(result);
-            if (forcedTarget.isPresent()) {
-                result = applyForcedHandoff(result, forcedTarget.get(), runner, collector);
-            }
-
             session.setHistory(ChatMessageCodec.forPersistence(result.updatedHistory()));
             session.setCurrentAgentId(result.currentAgentId());
             return new ChatResult(result.reply(), result.currentAgentId(),
@@ -65,14 +54,6 @@ public final class ShowcaseSessionEngine {
             }
             ShowcaseEventCollector.clear();
         }
-    }
-
-    private SwarmRunner createRunner(ShowcaseEventCollector collector) {
-        SwarmRunOptions options = SwarmRunOptions.builder()
-                .maxTurns(12)
-                .maxRecoveryAttempts(2)
-                .build();
-        return SwarmRunner.create(swarm, options, swarmToolExecutor, showcaseListener(collector));
     }
 
     private static SwarmRunListener showcaseListener(ShowcaseEventCollector collector) {
@@ -99,67 +80,23 @@ public final class ShowcaseSessionEngine {
         };
     }
 
-    private Optional<String> resolveForcedHandoff(SwarmRunner.RunResult result) {
-        if (!swarm.entryAgentId().equals(result.currentAgentId())) {
-            return Optional.empty();
-        }
-        List<ChatMessage> history = result.updatedHistory();
-        if (history.isEmpty()) {
-            return Optional.empty();
-        }
-        ChatMessage last = history.get(history.size() - 1);
-        if (!(last instanceof AiMessage ai) || ai.hasToolExecutionRequests()) {
-            return Optional.empty();
-        }
-        String userText = history.stream()
-                .filter(UserMessage.class::isInstance)
-                .map(m -> ((UserMessage) m).singleText())
-                .reduce((first, second) -> second)
-                .orElse("");
-        Optional<String> target = ShowcaseIntentRouter.handoffTarget(userText);
-        if (target.isEmpty()) {
-            return Optional.empty();
-        }
-        return swarm.getHandoffTargets(result.currentAgentId()).contains(target.get())
-                ? target
-                : Optional.empty();
-    }
-
-    private SwarmRunner.RunResult applyForcedHandoff(
-            SwarmRunner.RunResult firstResult,
-            String targetAgentId,
-            SwarmRunner runner,
-            ShowcaseEventCollector collector) {
-        List<ChatMessage> messages = new ArrayList<>(firstResult.updatedHistory());
-        if (!messages.isEmpty() && messages.get(messages.size() - 1) instanceof AiMessage) {
-            messages.remove(messages.size() - 1);
-        }
-        String from = firstResult.currentAgentId();
-        Agent to = swarm.getAgent(targetAgentId);
-        to.onEnter(SwarmContext.current());
-        collector.add(ShowcaseEvent.handoff(from, targetAgentId));
-        String targetInstructions = SwarmContext.current().resolve(to.instructions());
-        messages.set(0, SystemMessage.from(targetInstructions));
-        return runner.continueWithMessages(messages, targetAgentId, SwarmContext.current(), true);
-    }
-
-    private static Map<String, Object> contextSnapshot(SwarmContext ctx) {
-        Map<String, Object> snap = new LinkedHashMap<>();
+    private static Map<String, Object> contextSnapshot(SwarmContext context) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
         for (String key : List.of("user_id", "user_name", "vip_level", "total_spent",
                 "session_id", "trace_id", "entered_at", "order_status")) {
-            Object v = ctx.get(key);
-            if (v != null) {
-                snap.put(key, v);
+            Object value = context.get(key);
+            if (value != null) {
+                snapshot.put(key, value);
             }
         }
-        return snap;
+        return snapshot;
     }
 
-    private static String truncate(String s, int max) {
-        if (s == null) {
+    private static String truncate(String value, int max) {
+        if (value == null) {
             return null;
         }
-        return s.length() <= max ? s : s.substring(0, max) + "...";
+        return value.length() <= max ? value : value.substring(0, max) + "...";
     }
 
     public record ChatResult(

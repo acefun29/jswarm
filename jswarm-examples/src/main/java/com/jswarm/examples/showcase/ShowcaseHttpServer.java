@@ -18,11 +18,13 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
 
 public final class ShowcaseHttpServer {
 
-    private static final int PORT = 8080;
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final Swarm swarm;
@@ -30,6 +32,8 @@ public final class ShowcaseHttpServer {
     private final ShowcaseSessionEngine engine;
     private final SwarmRunner runner;
     private final ShowcaseSessionStore sessionStore;
+    private HttpServer server;
+    private ExecutorService executor;
 
     public ShowcaseHttpServer(ShowcaseSwarmFactory.BuildResult buildResult, ShowcaseSessionStore sessionStore) {
         this.buildResult = buildResult;
@@ -40,17 +44,30 @@ public final class ShowcaseHttpServer {
     }
 
     public void start() throws IOException {
-        HttpServer server = HttpServer.create(new InetSocketAddress(PORT), 0);
+        int port = Integer.getInteger("jswarm.showcase.port", 8080);
+        server = HttpServer.create(new InetSocketAddress(port), 0);
         server.createContext("/", this::handleStatic);
         server.createContext("/api/chat", this::handleChat);
         server.createContext("/api/chat/stream", this::handleChatStream);
         server.createContext("/api/reset", this::handleReset);
         server.createContext("/api/features", this::handleFeatures);
         server.createContext("/api/scenario/", this::handleScenario);
-        server.setExecutor(Executors.newFixedThreadPool(8));
+        executor = Executors.newFixedThreadPool(8);
+        server.setExecutor(executor);
         server.start();
-        System.out.println("Jswarm Showcase: http://localhost:" + PORT);
+        System.out.println("Jswarm Showcase: http://localhost:" + port);
         System.out.println("需要环境变量 DEEPSEEK_API_KEY");
+    }
+
+    public void close() {
+        if (server != null) {
+            server.stop(0);
+            server = null;
+        }
+        if (executor != null) {
+            executor.shutdownNow();
+            executor = null;
+        }
     }
 
     private void handleStatic(HttpExchange exchange) throws IOException {
@@ -83,7 +100,7 @@ public final class ShowcaseHttpServer {
             return;
         }
         @SuppressWarnings("unchecked")
-        Map<String, String> req = MAPPER.readValue(exchange.getRequestBody(), Map.class);
+        Map<String, String> req = readRequest(exchange);
         String sessionId = req.getOrDefault("sessionId", UUID.randomUUID().toString());
         String userId = req.getOrDefault("userId", "u001");
         String message = req.get("message");
@@ -124,7 +141,7 @@ public final class ShowcaseHttpServer {
             return;
         }
         @SuppressWarnings("unchecked")
-        Map<String, String> req = MAPPER.readValue(exchange.getRequestBody(), Map.class);
+        Map<String, String> req = readRequest(exchange);
         String sessionId = req.getOrDefault("sessionId", UUID.randomUUID().toString());
         String userId = req.getOrDefault("userId", "u001");
         String message = req.get("message");
@@ -148,18 +165,29 @@ public final class ShowcaseHttpServer {
 
         try (OutputStream os = exchange.getResponseBody()) {
             try {
-                runner.runStreaming(message, session.context(), event -> {
-                    try {
-                        String eventType = event.getClass().getSimpleName();
-                        String json = MAPPER.writeValueAsString(event);
-                        byte[] sseBytes = ("event: " + eventType + "\ndata: " + json + "\n\n")
+            AtomicLong eventSeq = new AtomicLong();
+            AtomicReference<com.jswarm.runtime.run.RunHandle> handleRef = new AtomicReference<>();
+            com.jswarm.runtime.run.RunHandle handle = runner.runStreaming(message, session.context(), event -> {
+                try {
+                    String eventType = event.getClass().getSimpleName();
+                    String json = MAPPER.writeValueAsString(event);
+                        byte[] sseBytes = ("id: " + eventSeq.incrementAndGet() + "\nevent: " + eventType + "\ndata: " + json + "\n\n")
                                 .getBytes(StandardCharsets.UTF_8);
                         os.write(sseBytes);
                         os.flush();
                     } catch (IOException e) {
+                        com.jswarm.runtime.run.RunHandle active = handleRef.get();
+                        if (active != null) {
+                            active.cancel();
+                        }
                         throw new RuntimeException("SSE write failed", e);
                     }
                 });
+                handleRef.set(handle);
+                com.jswarm.runtime.run.RunResult streamed = handle.await();
+                session.setHistory(new com.jswarm.adapter.lc4j.runtime.Lc4jMessageCodec()
+                        .encode(streamed.history()));
+                session.setCurrentAgentId(streamed.currentAgentId());
                 sessionStore.save(session);
             } catch (SwarmException e) {
                 String errJson = MAPPER.writeValueAsString(Map.of("error", e.getMessage()));
@@ -179,7 +207,7 @@ public final class ShowcaseHttpServer {
             return;
         }
         @SuppressWarnings("unchecked")
-        Map<String, String> req = MAPPER.readValue(exchange.getRequestBody(), Map.class);
+        Map<String, String> req = readRequest(exchange);
         String sessionId = req.get("sessionId");
         String userId = req.getOrDefault("userId", "u001");
         if (sessionId != null) {
@@ -190,8 +218,17 @@ public final class ShowcaseHttpServer {
     }
 
     private ShowcaseSession loadOrCreateSession(String sessionId, String userId) {
-        return sessionStore.load(sessionId, swarm.entryAgentId())
+        return sessionStore.load(sessionId, swarm.entryAgentId(), userId)
                 .orElseGet(() -> newSession(sessionId, userId));
+    }
+
+    private static Map<String, String> readRequest(HttpExchange exchange) throws IOException {
+        int contentLength = exchange.getRequestHeaders().getFirst("Content-Length") != null
+                ? Integer.parseInt(exchange.getRequestHeaders().getFirst("Content-Length")) : 0;
+        if (contentLength > 64 * 1024) {
+            throw new IOException("request body exceeds 64KiB");
+        }
+        return MAPPER.readValue(exchange.getRequestBody(), Map.class);
     }
 
     private void handleFeatures(HttpExchange exchange) throws IOException {

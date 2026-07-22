@@ -14,6 +14,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -23,6 +24,7 @@ public final class ShowcaseSessionStore implements AutoCloseable {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final String jdbcUrl;
+    private final Duration ttl = Duration.ofHours(1);
 
     public ShowcaseSessionStore(Path dbPath) throws Exception {
         if (dbPath.getParent() != null) {
@@ -52,20 +54,38 @@ public final class ShowcaseSessionStore implements AutoCloseable {
                         entry_hook_fired INTEGER NOT NULL,
                         context_json TEXT NOT NULL,
                         history_json TEXT NOT NULL,
-                        updated_at TEXT NOT NULL
+                        updated_at TEXT NOT NULL,
+                        version INTEGER NOT NULL DEFAULT 0
                     )
                     """);
+            try {
+                stmt.execute("ALTER TABLE showcase_session ADD COLUMN version INTEGER NOT NULL DEFAULT 0");
+            } catch (Exception ignored) {
+            }
         }
     }
 
     public Optional<ShowcaseSession> load(String sessionId, String entryAgentId) {
+        return load(sessionId, entryAgentId, null);
+    }
+
+    public Optional<ShowcaseSession> load(String sessionId, String entryAgentId, String ownerId) {
         try (Connection connection = openConnection();
              PreparedStatement ps = connection.prepareStatement(
-                     "SELECT user_id, current_agent_id, entry_hook_fired, context_json, history_json "
+                     "SELECT user_id, current_agent_id, entry_hook_fired, context_json, history_json, updated_at, version "
                              + "FROM showcase_session WHERE session_id = ?")) {
             ps.setString(1, sessionId);
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) {
+                    return Optional.empty();
+                }
+                String storedOwner = rs.getString("user_id");
+                if (ownerId != null && !ownerId.equals(storedOwner)) {
+                    return Optional.empty();
+                }
+                Instant updated = Instant.parse(rs.getString("updated_at"));
+                if (updated.plus(ttl).isBefore(Instant.now())) {
+                    delete(sessionId);
                     return Optional.empty();
                 }
                 SwarmContext ctx = decodeContext(rs.getString("context_json"));
@@ -73,6 +93,7 @@ public final class ShowcaseSessionStore implements AutoCloseable {
                 session.setCurrentAgentId(rs.getString("current_agent_id"));
                 session.setEntryHookFired(rs.getInt("entry_hook_fired") == 1);
                 session.setHistory(ChatMessageCodec.decode(rs.getString("history_json")));
+                session.setVersion(rs.getLong("version"));
                 return Optional.of(session);
             }
         } catch (Exception e) {
@@ -80,7 +101,7 @@ public final class ShowcaseSessionStore implements AutoCloseable {
         }
     }
 
-    public void save(ShowcaseSession session) {
+    public synchronized void save(ShowcaseSession session) {
         try (Connection connection = openConnection()) {
             String userId = session.context().get("user_id", String.class);
             if (userId == null) {
@@ -88,27 +109,61 @@ public final class ShowcaseSessionStore implements AutoCloseable {
             }
             String contextJson = encodeContext(session.context());
             String historyJson = ChatMessageCodec.encode(session.history());
-            try (PreparedStatement ps = connection.prepareStatement("""
+            connection.setAutoCommit(false);
+            long nextVersion;
+            boolean existing;
+            try (PreparedStatement current = connection.prepareStatement(
+                    "SELECT version FROM showcase_session WHERE session_id = ?")) {
+                current.setString(1, session.sessionId());
+                try (ResultSet rs = current.executeQuery()) {
+                    if (rs.next()) {
+                        long storedVersion = rs.getLong(1);
+                        if (storedVersion != session.version()) {
+                            throw new IllegalStateException("Session version conflict: " + session.sessionId());
+                        }
+                        existing = true;
+                        nextVersion = storedVersion + 1;
+                    } else {
+                        existing = false;
+                        nextVersion = 1;
+                    }
+                }
+            }
+            String sql = existing ? """
+                    UPDATE showcase_session SET user_id = ?, current_agent_id = ?, entry_hook_fired = ?,
+                        context_json = ?, history_json = ?, updated_at = ?, version = ?
+                    WHERE session_id = ? AND version = ?
+                    """ : """
                     INSERT INTO showcase_session
-                    (session_id, user_id, current_agent_id, entry_hook_fired, context_json, history_json, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(session_id) DO UPDATE SET
-                        user_id = excluded.user_id,
-                        current_agent_id = excluded.current_agent_id,
-                        entry_hook_fired = excluded.entry_hook_fired,
-                        context_json = excluded.context_json,
-                        history_json = excluded.history_json,
-                        updated_at = excluded.updated_at
-                    """)) {
-                ps.setString(1, session.sessionId());
-                ps.setString(2, userId);
-                ps.setString(3, session.currentAgentId());
-                ps.setInt(4, session.entryHookFired() ? 1 : 0);
-                ps.setString(5, contextJson);
-                ps.setString(6, historyJson);
-                ps.setString(7, Instant.now().toString());
+                    (session_id, user_id, current_agent_id, entry_hook_fired, context_json, history_json, updated_at, version)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """;
+            try (PreparedStatement ps = connection.prepareStatement(sql)) {
+                int i = 1;
+                if (existing) {
+                    ps.setString(i++, userId);
+                    ps.setString(i++, session.currentAgentId());
+                    ps.setInt(i++, session.entryHookFired() ? 1 : 0);
+                    ps.setString(i++, contextJson);
+                    ps.setString(i++, historyJson);
+                    ps.setString(i++, Instant.now().toString());
+                    ps.setLong(i++, nextVersion);
+                    ps.setString(i++, session.sessionId());
+                    ps.setLong(i, session.version());
+                } else {
+                    ps.setString(i++, session.sessionId());
+                    ps.setString(i++, userId);
+                    ps.setString(i++, session.currentAgentId());
+                    ps.setInt(i++, session.entryHookFired() ? 1 : 0);
+                    ps.setString(i++, contextJson);
+                    ps.setString(i++, historyJson);
+                    ps.setString(i++, Instant.now().toString());
+                    ps.setLong(i, nextVersion);
+                }
                 ps.executeUpdate();
             }
+            connection.commit();
+            session.setVersion(nextVersion);
         } catch (Exception e) {
             throw new IllegalStateException("Failed to save session: " + session.sessionId(), e);
         }

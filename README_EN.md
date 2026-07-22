@@ -245,6 +245,8 @@ Covers basic features: handoff, delegate, lifecycle hooks, dynamic instructions,
 export DEEPSEEK_API_KEY=sk-...
 mvn -pl jswarm-examples exec:java
 ```
+
+The showcase uses DeepSeek by default and refuses to start a real model without a key. CI can run `mvn -pl jswarm-examples,jswarm-examples-spring-ai -am test` without network access. Sessions are owner-scoped and persisted with TTL and optimistic versions; disconnecting an SSE client cancels its run.
 Open **http://localhost:8080** in your browser.
 
 If dependencies are not yet installed:

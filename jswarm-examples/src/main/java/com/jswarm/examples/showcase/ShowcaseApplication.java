@@ -41,7 +41,9 @@ public final class ShowcaseApplication {
             } catch (Exception ignored) {
             }
         }));
-        new ShowcaseHttpServer(build, sessionStore).start();
+        ShowcaseHttpServer server = new ShowcaseHttpServer(build, sessionStore);
+        Runtime.getRuntime().addShutdownHook(new Thread(server::close));
+        server.start();
         System.out.println("会话持久化: " + dbPath.toAbsolutePath());
     }
 }

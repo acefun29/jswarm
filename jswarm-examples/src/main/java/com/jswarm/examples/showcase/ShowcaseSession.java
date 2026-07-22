@@ -14,6 +14,7 @@ public final class ShowcaseSession {
     private String currentAgentId;
     private List<ChatMessage> history = new ArrayList<>();
     private boolean entryHookFired;
+    private long version;
 
     public ShowcaseSession(String sessionId, String entryAgentId, SwarmContext context) {
         this.sessionId = sessionId;
@@ -57,5 +58,13 @@ public final class ShowcaseSession {
 
     public void setEntryHookFired(boolean entryHookFired) {
         this.entryHookFired = entryHookFired;
+    }
+
+    public long version() {
+        return version;
+    }
+
+    public void setVersion(long version) {
+        this.version = version;
     }
 }

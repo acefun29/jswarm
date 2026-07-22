@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import jakarta.annotation.PreDestroy;
 
 @RestController
 public class ChatController {
@@ -55,8 +56,9 @@ public class ChatController {
         });
 
         sseExecutor.submit(() -> {
+            final java.util.concurrent.atomic.AtomicReference<com.jswarm.runtime.run.RunHandle> handleRef = new java.util.concurrent.atomic.AtomicReference<>();
             try {
-                runner.runStreaming(message, ctx, event -> {
+                com.jswarm.runtime.run.RunHandle handle = runner.runStreaming(message, ctx, event -> {
                     try {
                         String type;
                         if (event instanceof SwarmEvent.RunStarted) {
@@ -94,8 +96,12 @@ public class ChatController {
                         }
                     } catch (Exception e) {
                         emitter.completeWithError(e);
+                        com.jswarm.runtime.run.RunHandle active = handleRef.get();
+                        if (active != null) active.cancel();
                     }
                 });
+                handleRef.set(handle);
+                handle.await();
             } catch (RuntimeException e) {
                 emitter.completeWithError(e);
             }
@@ -109,5 +115,10 @@ public class ChatController {
         String sessionId = body.getOrDefault("sessionId", "default");
         sessions.remove(sessionId);
         return Map.of("status", "ok");
+    }
+
+    @PreDestroy
+    public void close() {
+        sseExecutor.shutdownNow();
     }
 }
