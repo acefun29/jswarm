@@ -218,14 +218,16 @@ SwarmContext ctx = new SwarmContext();
 ctx.put("user_name", "Alice");
 
 SwarmRunner runner = SwarmRunner.create(swarm);
-runner.runStreaming("My activation code is invalid, please help", ctx, event -> {
+RunHandle handle = runner.runStreaming("My activation code is invalid, please help", ctx, event -> {
     if (event instanceof SwarmEvent.Token token) {
         System.out.print(token.text()); // Real-time token output
     }
 });
+// Cancel when needed: handle.cancel();
+handle.await();
 ```
 
-For multi-turn conversations, maintain a `List<ChatMessage>` history at the application layer. See `ShowcaseSessionEngine` in `jswarm-examples` or `ChatController` in `jswarm-examples-spring-ai`.
+For multi-turn conversations, use the `runWithHistory` overload backed by `HistoryStore` for canonical history, versions, and checksums; the legacy `List<ChatMessage>` overload remains available.
 
 ---
 

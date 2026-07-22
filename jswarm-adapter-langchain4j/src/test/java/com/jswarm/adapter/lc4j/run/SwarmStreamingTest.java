@@ -36,7 +36,7 @@ class SwarmStreamingTest {
 
         Swarm swarm = Swarm.create("test").agent(a).entry("a").build();
         SwarmRunner runner = SwarmRunner.create(swarm);
-        runner.runStreaming("hi", new SwarmContext(), events::add);
+        runner.runStreaming("hi", new SwarmContext(), events::add).await();
 
         assertEquals(5, events.size());
         assertInstanceOf(SwarmEvent.RunStarted.class, events.get(0));
@@ -59,7 +59,7 @@ class SwarmStreamingTest {
 
         Swarm swarm = Swarm.create("test").agent(a).entry("a").build();
         SwarmRunner runner = SwarmRunner.create(swarm);
-        runner.runStreaming("hi", new SwarmContext(), events::add);
+        runner.runStreaming("hi", new SwarmContext(), events::add).await();
 
         List<SwarmEvent> tokens = events.stream()
                 .filter(e -> e instanceof SwarmEvent.Token).toList();
@@ -82,7 +82,7 @@ class SwarmStreamingTest {
 
         Swarm swarm = Swarm.create("test").agent(a).entry("a").build();
         SwarmRunner runner = SwarmRunner.create(swarm);
-        runner.runStreaming("weather", new SwarmContext(), events::add);
+        runner.runStreaming("weather", new SwarmContext(), events::add).await();
 
         assertTrue(events.stream().anyMatch(e -> e instanceof SwarmEvent.ToolCall));
         assertTrue(events.stream().anyMatch(e -> e instanceof SwarmEvent.ToolResult));
@@ -106,7 +106,7 @@ class SwarmStreamingTest {
                 .handoff("a", "b")
                 .build();
         SwarmRunner runner = SwarmRunner.create(swarm);
-        runner.runStreaming("help", new SwarmContext(), events::add);
+        runner.runStreaming("help", new SwarmContext(), events::add).await();
 
         assertTrue(events.stream().anyMatch(e -> e instanceof SwarmEvent.Handoff));
         SwarmEvent.Handoff h = (SwarmEvent.Handoff) events.stream()
@@ -133,7 +133,7 @@ class SwarmStreamingTest {
                 .agent(streamingB())
                 .build();
         SwarmRunner runner = SwarmRunner.create(swarm);
-        runner.runStreaming("analyze", new SwarmContext(), events::add);
+        runner.runStreaming("analyze", new SwarmContext(), events::add).await();
 
         assertTrue(events.stream().anyMatch(e -> e instanceof SwarmEvent.DelegateStarted));
         assertTrue(events.stream().anyMatch(e -> e instanceof SwarmEvent.DelegateFinished));
@@ -166,7 +166,7 @@ class SwarmStreamingTest {
                 .build();
         SwarmRunner runner = SwarmRunner.create(swarm,
                 SwarmRunOptions.builder().delegateStreaming(true).build());
-        runner.runStreaming("go", new SwarmContext(), events::add);
+        runner.runStreaming("go", new SwarmContext(), events::add).await();
 
         List<SwarmEvent.Token> tokens = events.stream()
                 .filter(e -> e instanceof SwarmEvent.Token)
@@ -199,7 +199,7 @@ class SwarmStreamingTest {
                 .build();
         SwarmRunner runner = SwarmRunner.create(swarm,
                 SwarmRunOptions.builder().delegateStreaming(false).build());
-        runner.runStreaming("go", new SwarmContext(), events::add);
+        runner.runStreaming("go", new SwarmContext(), events::add).await();
 
         List<SwarmEvent.Token> tokens = events.stream()
                 .filter(e -> e instanceof SwarmEvent.Token)
@@ -224,7 +224,7 @@ class SwarmStreamingTest {
 
         List<SwarmEvent> events = new ArrayList<>();
         SwarmContext ctx = new SwarmContext();
-        runner.runStreaming("hi", ctx, events::add);
+        runner.runStreaming("hi", ctx, events::add).await();
 
         SwarmEvent.RunCompleted rc = (SwarmEvent.RunCompleted) events.stream()
                 .filter(e -> e instanceof SwarmEvent.RunCompleted).findFirst().get();
@@ -258,7 +258,7 @@ class SwarmStreamingTest {
 
         Swarm swarm = Swarm.create("test").agent(a).entry("a").build();
         SwarmRunner runner = SwarmRunner.create(swarm);
-        runner.runStreaming("hi", new SwarmContext(), e -> {});
+        runner.runStreaming("hi", new SwarmContext(), e -> {}).await();
 
         assertEquals("entered", entered.get());
         assertEquals("exited", exited.get());
@@ -275,7 +275,7 @@ class SwarmStreamingTest {
 
         Swarm swarm = Swarm.create("test").agent(a).entry("a").build();
         SwarmRunner runner = SwarmRunner.create(swarm);
-        assertDoesNotThrow(() -> runner.runStreaming("hi", new SwarmContext(), events::add));
+        assertDoesNotThrow(() -> runner.runStreaming("hi", new SwarmContext(), events::add).await());
 
         SwarmEvent.RunCompleted rc = (SwarmEvent.RunCompleted) events.stream()
                 .filter(e -> e instanceof SwarmEvent.RunCompleted).findFirst().get();
@@ -302,8 +302,8 @@ class SwarmStreamingTest {
 
         Swarm swarm = Swarm.create("test").agent(a).entry("a").build();
         SwarmRunner runner = SwarmRunner.create(swarm, 1);
-        assertThrows(SwarmException.class,
-                () -> runner.runStreaming("hi", new SwarmContext(), events::add));
+        assertThrows(java.util.concurrent.CompletionException.class,
+                () -> runner.runStreaming("hi", new SwarmContext(), events::add).await());
 
         assertTrue(events.stream().anyMatch(e -> e instanceof SwarmEvent.RunFailed));
     }

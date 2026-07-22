@@ -51,8 +51,10 @@ public final class SpringAiModelGateway implements ModelGateway {
         AssistantMessage response;
         if (request.streaming()) {
             response = advisors.isEmpty()
-                    ? StreamingChatInvoker.stream(agent, prompt, effectiveTimeout, streamingSink)
-                    : AdvisorChatInvoker.stream(agent, prompt, effectiveTimeout, advisors, streamingSink);
+                    ? StreamingChatInvoker.stream(agent, prompt, effectiveTimeout, streamingSink,
+                            scope.cancellation())
+                    : AdvisorChatInvoker.stream(agent, prompt, effectiveTimeout, advisors, streamingSink,
+                            scope.cancellation());
         } else {
             response = advisors.isEmpty()
                     ? ChatInvoker.invoke(agent, prompt, effectiveTimeout).getResult().getOutput()

@@ -12,13 +12,20 @@ import com.jswarm.runtime.event.RunEvent;
 import com.jswarm.runtime.event.RunEventType;
 import com.jswarm.runtime.run.RunEngine;
 import com.jswarm.runtime.run.RunInput;
+import com.jswarm.runtime.run.RunHandle;
+import com.jswarm.runtime.history.HistoryCoordinator;
+import com.jswarm.spi.history.HistoryRecord;
+import com.jswarm.spi.history.HistoryStore;
+import com.jswarm.spi.id.SwarmVersion;
 import com.jswarm.spi.run.RunExecution;
+import com.jswarm.spi.run.RunScopeFactory;
 import com.jswarm.spi.run.RunScope;
 import org.springframework.ai.chat.messages.Message;
 
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 public final class SwarmRunner {
@@ -125,14 +132,70 @@ public final class SwarmRunner {
         return toLegacy(execute(input, context, NOOP_EVENT_SINK));
     }
 
-    public void runStreaming(
+    public RunResult runWithHistory(
+            String sessionId,
+            String userMessage,
+            String startAgentId,
+            SwarmContext context,
+            HistoryStore store) {
+        SwarmContext effective = context != null ? context : new SwarmContext();
+        SwarmVersion version = SwarmVersion.of(swarm.id());
+        String tenantId = value(effective, "tenant_id");
+        HistoryRecord previous = store.load(sessionId).orElse(null);
+        List<Message> prior = codec.encode(
+                HistoryCoordinator.load(store, sessionId, version, tenantId));
+        com.jswarm.runtime.run.RunResult result = execute(
+                new RunInput(userMessage, codec.decode(prior), startAgentId, false, false),
+                effective, NOOP_EVENT_SINK);
+        HistoryCoordinator.save(store, sessionId, previous, version, tenantId, result);
+        return toLegacy(result);
+    }
+
+    private static String value(SwarmContext context, String key) {
+        Object value = context.asMap().get(key);
+        return value != null ? String.valueOf(value) : null;
+    }
+
+    public RunHandle runStreaming(
             String userMessage,
             SwarmContext context,
             Consumer<SwarmEvent> sink) {
         Consumer<SwarmEvent> effectiveSink = sink != null ? sink : NOOP_EVENT_SINK;
-        effectiveSink.accept(new SwarmEvent.RunStarted("", swarm.entryAgentId()));
-        execute(new RunInput(userMessage, List.of(), swarm.entryAgentId(), false, true),
-                context, effectiveSink);
+        if (!running.compareAndSet(false, true)) {
+            throw new IllegalStateException("SwarmRunner is already running");
+        }
+        SwarmContext effectiveContext = context != null ? context : new SwarmContext();
+        RunScope scope = RunScopeFactory.from(
+                swarm, swarm.entryAgentId(),
+                RunExecution.limits(options.maxTurns(), options.maxDelegateDepth()),
+                RunExecution.policy(options.maxRecoveryAttempts(), options.modelTimeout(), options.delegateStreaming()),
+                effectiveContext);
+        CompletableFuture<com.jswarm.runtime.run.RunResult> future = new CompletableFuture<>();
+        RunHandle handle = new RunHandle(scope, future);
+        activeListener = listener;
+        activeCoreSink = effectiveSink;
+        effectiveSink.accept(new SwarmEvent.RunStarted(scope.runId().value(), swarm.entryAgentId()));
+        CompletableFuture.runAsync(() -> {
+            try {
+                com.jswarm.runtime.run.RunResult result = RunExecution.execute(
+                        scope, effectiveContext,
+                        () -> engine.run(scope,
+                                new RunInput(userMessage, List.of(), swarm.entryAgentId(), false, true),
+                                event -> {
+                                    handle.append(event);
+                                    dispatchRuntimeEvent(event);
+                                }));
+                fireHistory(codec.encode(result.history()));
+                future.complete(result);
+            } catch (RuntimeException failure) {
+                future.completeExceptionally(failure);
+            } finally {
+                activeCoreSink = NOOP_EVENT_SINK;
+                activeListener = null;
+                running.set(false);
+            }
+        });
+        return handle;
     }
 
     private com.jswarm.runtime.run.RunResult execute(

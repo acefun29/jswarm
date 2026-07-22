@@ -44,7 +44,7 @@ public final class Lc4jModelGateway implements ModelGateway {
         Duration effectiveTimeout = RunScopeChecks.effectiveModelTimeout(scope, timeout);
         AiMessage response = request.streaming()
                 ? StreamingChatInvoker.stream(agent, chatRequest, SwarmContext.current(),
-                        effectiveTimeout, streamingSink)
+                        effectiveTimeout, streamingSink, scope.cancellation())
                 : ChatInvoker.invoke(agent, chatRequest, effectiveTimeout);
         return new ModelResult(messageCodec.decode(response));
     }

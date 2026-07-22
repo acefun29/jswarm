@@ -30,6 +30,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import com.jswarm.spi.time.CancellationToken;
 
 public final class AdvisorChatInvoker {
 
@@ -57,8 +58,15 @@ public final class AdvisorChatInvoker {
     public static AssistantMessage stream(JAgent agent, Prompt prompt,
                                            Duration timeout, List<Advisor> advisors,
                                            Consumer<SwarmEvent> sink) {
+        return stream(agent, prompt, timeout, advisors, sink, null);
+    }
+
+    public static AssistantMessage stream(JAgent agent, Prompt prompt,
+                                           Duration timeout, List<Advisor> advisors,
+                                           Consumer<SwarmEvent> sink,
+                                           CancellationToken cancellation) {
         if (advisors == null || advisors.isEmpty()) {
-            return StreamingChatInvoker.stream(agent, prompt, timeout, sink);
+            return StreamingChatInvoker.stream(agent, prompt, timeout, sink, cancellation);
         }
         DefaultAroundAdvisorChain chain = DefaultAroundAdvisorChain
                 .builder(ObservationRegistry.NOOP)
@@ -70,13 +78,14 @@ public final class AdvisorChatInvoker {
                 .build();
         var flux = chain.nextStream(request)
                 .map(ChatClientResponse::chatResponse);
-        return aggregateStreaming(agent.id(), flux, timeout, sink);
+        return aggregateStreaming(agent.id(), flux, timeout, sink, cancellation);
     }
 
     private static AssistantMessage aggregateStreaming(String agentId,
                                                         reactor.core.publisher.Flux<ChatResponse> chatFlux,
                                                         Duration timeout,
-                                                        Consumer<SwarmEvent> sink) {
+                                                        Consumer<SwarmEvent> sink,
+                                                        CancellationToken cancellation) {
         SwarmContext captured = SwarmContext.current();
 
         Future<AssistantMessage> future = EXECUTOR.submit(() -> {
@@ -97,7 +106,8 @@ public final class AdvisorChatInvoker {
                             SwarmContext earlier = SwarmContext.current();
                             SwarmContext.set(captured);
                             try {
-                                if (chunk.getResult() != null) {
+                                if ((cancellation == null || !cancellation.isCancelled())
+                                        && chunk.getResult() != null) {
                                     AssistantMessage msg = chunk.getResult().getOutput();
                                     if (msg != null) {
                                         String text = msg.getText();
@@ -121,7 +131,11 @@ public final class AdvisorChatInvoker {
                         .subscribe();
 
                 try {
-                    latch.await();
+                    while (!latch.await(50, TimeUnit.MILLISECONDS)) {
+                        if (cancellation != null) {
+                            cancellation.throwIfCancelled();
+                        }
+                    }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     throw new SwarmException("Streaming LLM call was interrupted", e);
@@ -163,6 +177,9 @@ public final class AdvisorChatInvoker {
             future.cancel(true);
             throw new SwarmException("Streaming LLM call was interrupted", e);
         } catch (CancellationException | ExecutionException e) {
+            if (cancellation != null && cancellation.isCancelled()) {
+                cancellation.throwIfCancelled();
+            }
             if (e.getCause() instanceof SwarmException se) throw se;
             throw new SwarmException("Streaming LLM call failed: " + e.getMessage(), e);
         }

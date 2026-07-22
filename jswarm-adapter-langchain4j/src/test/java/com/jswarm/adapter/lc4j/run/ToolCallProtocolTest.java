@@ -208,7 +208,7 @@ class ToolCallProtocolTest {
                 .build();
 
         Swarm swarm = Swarm.create("test").agent(a).entry("a").build();
-        SwarmRunner.create(swarm).runStreaming("hi", new SwarmContext(), events::add);
+        SwarmRunner.create(swarm).runStreaming("hi", new SwarmContext(), events::add).await();
 
         SwarmEvent.RunCompleted completed = events.stream()
                 .filter(e -> e instanceof SwarmEvent.RunCompleted)

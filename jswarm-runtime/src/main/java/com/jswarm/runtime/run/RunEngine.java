@@ -63,6 +63,10 @@ public final class RunEngine {
     }
 
     public RunResult run(RunScope scope, RunInput input) {
+        return run(scope, input, eventSink);
+    }
+
+    public RunResult run(RunScope scope, RunInput input, RunEventSink runSink) {
         Objects.requireNonNull(scope, "scope");
         Objects.requireNonNull(input, "input");
         String startAgentId = input.startAgentId() != null ? input.startAgentId() : swarm.entryAgentId();
@@ -78,7 +82,7 @@ public final class RunEngine {
             }
         }
 
-        EventDispatcher dispatcher = new EventDispatcher(eventSink);
+        EventDispatcher dispatcher = new EventDispatcher(runSink != null ? runSink : eventSink);
         Frame frame = new Frame(scope, startAgentId, input.streaming(), false, null, dispatcher);
         try {
             enter(frame, input.skipEntryHook());
@@ -130,7 +134,8 @@ public final class RunEngine {
                     frame.dispatcher.emit(frame.scope, frame.turn, frame.agentId, null,
                             RunEventType.COMPLETED, Map.of("reply", assistant.text()));
                 }
-                return new RunResult(assistant.text(), frame.agentId, frame.messages, RunState.COMPLETED);
+                return new RunResult(assistant.text(), frame.agentId, frame.messages,
+                        RunState.COMPLETED, frame.scope.runId());
             }
 
             transition(frame, RunState.TOOL_BATCH);

@@ -34,6 +34,24 @@ public final class RunExecution {
         }
     }
 
+    public static <T> T execute(
+            RunScope scope,
+            SwarmContext context,
+            Callable<T> action) {
+        SwarmContext effective = context != null ? context : scope.toSwarmContext();
+        SwarmContextBridge.ScopeBinding binding = SwarmContextBridge.bind(scope, effective);
+        try {
+            return action.call();
+        } catch (RuntimeException e) {
+            throw SwarmErrorMapper.toRuntimeException(e);
+        } catch (Exception e) {
+            throw SwarmErrorMapper.toRuntimeException(e);
+        } finally {
+            scope.markTerminal();
+            SwarmContextBridge.restore(binding);
+        }
+    }
+
     public static RunScopeFactory.RunBudgetLimits limits(int maxTurns, int maxDelegateDepth) {
         return new RunScopeFactory.RunBudgetLimits(maxTurns, maxTurns, Integer.MAX_VALUE, maxDelegateDepth);
     }

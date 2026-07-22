@@ -10,6 +10,7 @@ import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
+import com.jswarm.spi.time.CancellationToken;
 
 import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
@@ -24,9 +25,15 @@ public final class StreamingChatInvoker {
 
     public static AiMessage stream(JAgent agent, ChatRequest request, SwarmContext context,
                                    Duration timeout, Consumer<SwarmEvent> sink) {
+        return stream(agent, request, context, timeout, sink, null);
+    }
+
+    public static AiMessage stream(JAgent agent, ChatRequest request, SwarmContext context,
+                                   Duration timeout, Consumer<SwarmEvent> sink,
+                                   CancellationToken cancellation) {
         StreamingChatModel streamingModel = agent.streamingModel();
         if (streamingModel == null) {
-            return fallbackSync(agent, request, context, timeout, sink);
+            return fallbackSync(agent, request, context, timeout, sink, cancellation);
         }
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -42,7 +49,9 @@ public final class StreamingChatInvoker {
                 SwarmContext earlier = SwarmContext.current();
                 SwarmContext.set(captured);
                 try {
-                    sink.accept(new SwarmEvent.Token(agentId, partialResponse));
+                    if (cancellation == null || !cancellation.isCancelled()) {
+                        sink.accept(new SwarmEvent.Token(agentId, partialResponse));
+                    }
                 } finally {
                     if (earlier != null) {
                         SwarmContext.set(earlier);
@@ -57,7 +66,9 @@ public final class StreamingChatInvoker {
                 SwarmContext earlier = SwarmContext.current();
                 SwarmContext.set(captured);
                 try {
-                    resultRef.set(completeResponse.aiMessage());
+                    if (cancellation == null || !cancellation.isCancelled()) {
+                        resultRef.set(completeResponse.aiMessage());
+                    }
                 } finally {
                     if (earlier != null) {
                         SwarmContext.set(earlier);
@@ -86,9 +97,16 @@ public final class StreamingChatInvoker {
         });
 
         try {
-            boolean completed = latch.await(timeout.toMillis(), TimeUnit.MILLISECONDS);
-            if (!completed) {
-                throw new SwarmException("Streaming LLM call timed out after " + timeout);
+            long remaining = timeout.toMillis();
+            long started = System.nanoTime();
+            while (!latch.await(Math.min(50, Math.max(1, remaining)), TimeUnit.MILLISECONDS)) {
+                if (cancellation != null) {
+                    cancellation.throwIfCancelled();
+                }
+                remaining = timeout.toMillis() - (System.nanoTime() - started) / 1_000_000;
+                if (remaining <= 0) {
+                    throw new SwarmException("Streaming LLM call timed out after " + timeout);
+                }
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -107,7 +125,11 @@ public final class StreamingChatInvoker {
     }
 
     private static AiMessage fallbackSync(JAgent agent, ChatRequest request, SwarmContext context,
-                                          Duration timeout, Consumer<SwarmEvent> sink) {
+                                          Duration timeout, Consumer<SwarmEvent> sink,
+                                          CancellationToken cancellation) {
+        if (cancellation != null) {
+            cancellation.throwIfCancelled();
+        }
         SwarmContext previous = SwarmContext.current();
         SwarmContext.set(context);
         try {
@@ -115,6 +137,9 @@ public final class StreamingChatInvoker {
             logger.log(System.Logger.Level.WARNING,
                     "Agent '" + agent.id() + "' has no StreamingChatModel configured; falling back to synchronous ChatModel");
             AiMessage result = ChatInvoker.invoke(agent, request, timeout);
+            if (cancellation != null) {
+                cancellation.throwIfCancelled();
+            }
             String text = result.text();
             if (text != null) {
                 sink.accept(new SwarmEvent.Token(agent.id(), text));

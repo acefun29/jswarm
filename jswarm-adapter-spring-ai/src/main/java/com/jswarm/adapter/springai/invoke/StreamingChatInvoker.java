@@ -22,6 +22,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import com.jswarm.spi.time.CancellationToken;
 
 public final class StreamingChatInvoker {
 
@@ -32,16 +33,29 @@ public final class StreamingChatInvoker {
 
     public static AssistantMessage stream(JAgent agent, Prompt prompt, Duration timeout,
                                           Consumer<SwarmEvent> sink) {
+        return stream(agent, prompt, timeout, sink, null);
+    }
+
+    public static AssistantMessage stream(JAgent agent, Prompt prompt, Duration timeout,
+                                          Consumer<SwarmEvent> sink,
+                                          CancellationToken cancellation) {
         StreamingChatModel streamingModel = agent.streamingModel();
         if (streamingModel == null) {
-            return fallbackSync(agent, prompt, timeout, sink);
+            return fallbackSync(agent, prompt, timeout, sink, cancellation);
         }
-        return streamInternal(agent, prompt, timeout, sink, streamingModel);
+        return streamInternal(agent, prompt, timeout, sink, streamingModel, cancellation);
     }
 
     private static AssistantMessage fallbackSync(JAgent agent, Prompt prompt,
-                                                  Duration timeout, Consumer<SwarmEvent> sink) {
+                                                  Duration timeout, Consumer<SwarmEvent> sink,
+                                                  CancellationToken cancellation) {
+        if (cancellation != null) {
+            cancellation.throwIfCancelled();
+        }
         ChatResponse response = ChatInvoker.invoke(agent, prompt, timeout);
+        if (cancellation != null) {
+            cancellation.throwIfCancelled();
+        }
         AssistantMessage msg = response.getResult().getOutput();
         String text = msg.getText();
         if (text != null && !text.isEmpty()) {
@@ -52,7 +66,8 @@ public final class StreamingChatInvoker {
 
     private static AssistantMessage streamInternal(JAgent agent, Prompt prompt,
                                                     Duration timeout, Consumer<SwarmEvent> sink,
-                                                    StreamingChatModel streamingModel) {
+                                                    StreamingChatModel streamingModel,
+                                                    CancellationToken cancellation) {
         SwarmContext captured = SwarmContext.current();
         String agentId = agent.id();
 
@@ -74,7 +89,8 @@ public final class StreamingChatInvoker {
                             SwarmContext earlier = SwarmContext.current();
                             SwarmContext.set(captured);
                             try {
-                                if (chunk.getResult() != null) {
+                                if ((cancellation == null || !cancellation.isCancelled())
+                                        && chunk.getResult() != null) {
                                     AssistantMessage msg = chunk.getResult().getOutput();
                                     if (msg != null) {
                                         String text = msg.getText();
@@ -98,7 +114,11 @@ public final class StreamingChatInvoker {
                         .subscribe();
 
                 try {
-                    latch.await();
+                    while (!latch.await(50, TimeUnit.MILLISECONDS)) {
+                        if (cancellation != null) {
+                            cancellation.throwIfCancelled();
+                        }
+                    }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     throw new SwarmException("Streaming LLM call was interrupted", e);
@@ -142,6 +162,9 @@ public final class StreamingChatInvoker {
             future.cancel(true);
             throw new SwarmException("Streaming LLM call was interrupted", e);
         } catch (CancellationException | ExecutionException e) {
+            if (cancellation != null && cancellation.isCancelled()) {
+                cancellation.throwIfCancelled();
+            }
             if (e.getCause() instanceof SwarmException se) {
                 throw se;
             }

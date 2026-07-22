@@ -218,14 +218,16 @@ SwarmContext ctx = new SwarmContext();
 ctx.put("user_name", "张三");
 
 SwarmRunner runner = SwarmRunner.create(swarm);
-runner.runStreaming("我的激活码无效，请帮我排查", ctx, event -> {
+RunHandle handle = runner.runStreaming("我的激活码无效，请帮我排查", ctx, event -> {
     if (event instanceof SwarmEvent.Token token) {
         System.out.print(token.text()); // 实时流式输出
     }
 });
+// 需要中断时：handle.cancel();
+handle.await();
 ```
 
-多轮对话需在应用层维护 `List<ChatMessage>` history，参考 `jswarm-examples` 中的 `ShowcaseSessionEngine` 或 `jswarm-examples-spring-ai` 中的 `ChatController`。
+多轮对话可继续使用 `runWithHistory`，或通过 `HistoryStore` 重载保存 canonical history、版本和 checksum；应用层也可维护 `List<ChatMessage>` 兼容旧 API。
 
 ---
 
