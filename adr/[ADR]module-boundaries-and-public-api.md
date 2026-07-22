@@ -1,9 +1,9 @@
 # [ADR] 模块边界与公开能力
 
-> 状态：已采纳  
-> 日期：2026-07-21  
-> 关联计划：`[计划-00]基线与兼容矩阵冻结.md`  
-> 基线 commit：`5e4df28`
+> 状态：已采纳
+> 日期：2026-07-22
+> 关联计划：`[计划-00]基线与兼容矩阵冻结.md`、`[计划-03]共享Runtime状态机与AdapterTCK.md`
+> 基线 commit：`f0d8064`
 
 ## 正式坐标与仓库
 
@@ -19,21 +19,23 @@
 | 模块 | 本基线角色 | 是否父 reactor 发布物 |
 |------|------------|----------------------|
 | `jswarm-core` | 纯拓扑，零外部依赖 | 是 |
-| `jswarm-adapter-langchain4j` | LangChain4j 适配 | 是 |
-| `jswarm-adapter-spring-ai` | Spring AI 适配（含实验性 Boot autoconfig） | 是 |
+| `jswarm-spi` | Canonical message、运行作用域、typed error 与 provider-neutral SPI | 是 |
+| `jswarm-runtime` | 唯一模型无关编排状态机；仅依赖 Core/SPI | 是 |
+| `jswarm-adapter-tck` | 两个 Adapter 共用的兼容性测试夹具 | 是（测试支持） |
+| `jswarm-adapter-langchain4j` | LangChain4j gateway、codec、tool bridge 与兼容 facade | 是 |
+| `jswarm-adapter-spring-ai` | Spring AI gateway、codec、tool bridge 与兼容 facade（含实验性 Boot autoconfig） | 是 |
 | `jswarm-examples` | LC4j Showcase | 是（示例，非正式库消费者依赖） |
 | `jswarm-examples-spring-ai` | Spring AI Showcase | 是（示例） |
-| `jswarm-runtime` | 计划新增共享 Runtime | 否（未创建） |
-| `jswarm-spi` | 计划新增 SPI | 否（未创建） |
 | `jswarm-spring-boot-starter` | 计划从 adapter 拆出 | 否（未创建） |
 | `compliance-swarm` | 合规旁路示例 | 否（不在父 `<modules>`，非正式坐标） |
 
-本 ADR 只冻结边界，不提前创建 Runtime / SPI / Starter 模块。
+Runtime 统一决定 route、lifecycle、recovery 与 terminal 顺序。Adapter 不得复制模型无关主循环，只实现 provider bridge；旧 `SwarmRunner` 保持公开 facade 兼容。
 
 ## 公开能力表
 
 | 能力 | 状态 | 说明 |
 |------|------|------|
+| Canonical SPI / 共享 `RunEngine` | **稳定** | 两 Adapter 共用状态机并执行同一 TCK |
 | 同步 `SwarmRunner.run()` | **稳定** | 两 adapter |
 | `SwarmRunner.runStreaming()` | **稳定** | 两 adapter 均有实现与单元测试 |
 | LangChain4j `JAgent.fromAiService` | **稳定** | 有测试覆盖 |

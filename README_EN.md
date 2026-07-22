@@ -77,11 +77,13 @@ Application Code
      │
      ▼
 ┌──────────────────────────────────────────┐
-│ jswarm-adapter-langchain4j               │  LangChain4j Adapter Layer
+│ jswarm-adapter-langchain4j / spring-ai   │  Provider gateway / codec / tool bridge
 ├──────────────────────────────────────────┤
-│ jswarm-adapter-spring-ai                 │  Spring AI Adapter Layer
+│ jswarm-runtime                           │  Single provider-neutral state machine
 ├──────────────────────────────────────────┤
-│ jswarm-core                              │  Swarm / Agent / SwarmContext (Pure JDK)
+│ jswarm-spi                               │  Canonical message / scope / error
+├──────────────────────────────────────────┤
+│ jswarm-core                              │  Swarm / Agent / SwarmContext
 └──────────────────────────────────────────┘
      │
      ▼
@@ -92,8 +94,11 @@ jswarm-examples-spring-ai Showcase web demo (Spring AI)
 | Module | Description |
 |--------|-------------|
 | `jswarm-core` | Agent abstraction, Swarm topology, SwarmContext `{key}` templates (Pure JDK, zero external dependencies) |
-| `jswarm-adapter-langchain4j` | LangChain4j Adapter: JAgent runtime, SwarmRunner, tool bridging, handoff/delegate filtering |
-| `jswarm-adapter-spring-ai` | Spring AI Adapter: JAgent runtime, SwarmRunner (sync & streaming), autoconfiguration, Advisors bridging |
+| `jswarm-spi` | Canonical messages, RunScope, budget/cancellation, typed errors, and provider-neutral contracts |
+| `jswarm-runtime` | The single state machine for handoff, delegate, recovery, lifecycle, and terminal events |
+| `jswarm-adapter-tck` | Shared compatibility fixtures executed by both adapters |
+| `jswarm-adapter-langchain4j` | LangChain4j gateway, codecs, tool bridge, and compatible `SwarmRunner` facade |
+| `jswarm-adapter-spring-ai` | Spring AI gateway, codecs, tool bridge, and compatible `SwarmRunner` facade; includes experimental autoconfiguration |
 | `jswarm-examples` | Web showcase application based on LangChain4j |
 | `jswarm-examples-spring-ai` | Web showcase application based on Spring AI + Spring Boot + SSE |
 
@@ -275,6 +280,12 @@ Session data is persisted in `data/showcase.db` (gitignored, auto-created locall
 - `Swarm` / `SwarmBuilder`: entry, handoff, delegate topology
 - `SwarmContext`: request-scoped `{key}` template resolution, ThreadLocal isolation
 
+### jswarm-spi / jswarm-runtime
+
+- `RunScope` / `RunBudget`: shared parent-child budget, deadline, and cancellation
+- `CanonicalMessage` / `ModelGateway`: provider-neutral message and model contracts
+- `RunEngine` / `RunState` / `RunEvent`: shared route, lifecycle, recovery, and terminal ordering
+
 ### jswarm-adapter-langchain4j
 
 - `JAgent.builder()`: build agents with hook lambdas and `@Tool` bean registration
@@ -282,8 +293,8 @@ Session data is persisted in `data/showcase.db` (gitignored, auto-created locall
 - `JAgent.decorate()`: decorator pattern to layer hooks
 - `instructions(Function<SwarmContext, String>)`: dynamic instructions
 - `SwarmToolInjector`: inject orchestration tools based on topology
-- `SwarmFilter`: intercept tool calls, dispatch handoff / delegate / external tools
-- `SwarmRunner`: orchestration main loop
+- `SwarmFilter`: legacy compatibility wrapper delegating routing semantics to the shared Runtime
+- `SwarmRunner`: compatibility facade over the shared `RunEngine`
 - `SwarmRunOptions`: `maxTurns`, error recovery, `modelTimeout`
 - `ExternalToolExecutor`: swarm-level tool fallback
 
@@ -325,7 +336,7 @@ Prefer passing dynamic state via **tool results** or **delegate return values**.
 mvn test
 ```
 
-The examples modules require a live LLM and are typically skipped in CI. Unit tests are concentrated in the core, langchain4j adapter, and spring-ai adapter modules.
+The examples modules require a live LLM and are typically skipped in CI. Provider-neutral contracts live in Core/SPI/Runtime, and both adapters execute the same `jswarm-adapter-tck` suite.
 
 ---
 
@@ -341,6 +352,7 @@ The examples modules require a live LLM and are typically skipped in CI. Unit te
 - Dynamic instructions, error recovery
 - `runStreaming` on both adapters and Spring AI Showcase SSE
 - Spring Boot AutoConfiguration (experimental, Spring AI adapter only)
+- Canonical SPI, shared Runtime state machine, and cross-adapter TCK
 
 **Planned**
 
