@@ -28,6 +28,7 @@
         <module>jswarm-core</module>
         <module>jswarm-spi</module>
         <module>jswarm-runtime</module>
+        <module>jswarm-adapter-tck</module>
         <module>jswarm-adapter-langchain4j</module>
         <module>jswarm-adapter-spring-ai</module>
         <module>jswarm-examples</module>

@@ -1,4 +1,4 @@
-// 多轮会话引擎，委托 SwarmRunner 处理编排与 tool batch 协议
+// 多轮会话示例；关键词强制路由仅为演示兜底，计划 07 删除
 package com.jswarm.examples.showcase;
 
 import com.jswarm.adapter.lc4j.ExternalToolExecutor;

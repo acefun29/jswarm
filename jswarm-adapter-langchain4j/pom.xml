@@ -26,12 +26,23 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
+            <groupId>com.jswarm</groupId>
+            <artifactId>jswarm-runtime</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-core</artifactId>
         </dependency>
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.jswarm</groupId>
+            <artifactId>jswarm-adapter-tck</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>

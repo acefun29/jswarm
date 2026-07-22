@@ -76,7 +76,7 @@ public record SwarmRunOptions(
 
         public SwarmRunOptions build() {
             if (maxTurns <= 0) throw new IllegalArgumentException("maxTurns must be positive, got: " + maxTurns);
-            if (maxRecoveryAttempts <= 0) throw new IllegalArgumentException("maxRecoveryAttempts must be positive, got: " + maxRecoveryAttempts);
+            if (maxRecoveryAttempts < 0) throw new IllegalArgumentException("maxRecoveryAttempts must be >= 0, got: " + maxRecoveryAttempts);
             if (maxDelegateDepth <= 0) throw new IllegalArgumentException("maxDelegateDepth must be positive, got: " + maxDelegateDepth);
             Duration timeout = modelTimeout != null ? modelTimeout : RunDefaults.MODEL_TIMEOUT;
             return new SwarmRunOptions(maxTurns, maxRecoveryAttempts, maxDelegateDepth, timeout, delegateStreaming, listener, advisors, exceptionProcessor);

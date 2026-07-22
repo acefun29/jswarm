@@ -4,6 +4,8 @@ import com.jswarm.adapter.lc4j.DefaultJAgent;
 import com.jswarm.adapter.lc4j.JAgent;
 import com.jswarm.core.Swarm;
 import com.jswarm.core.SwarmContext;
+import com.jswarm.spi.error.SwarmErrorCode;
+import com.jswarm.spi.error.SwarmErrorException;
 import com.jswarm.core.SwarmException;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
@@ -142,8 +144,8 @@ class SwarmLifecycleTest {
         Swarm swarm = Swarm.create("test").agent(a).entry("a").build();
         SwarmRunner runner = SwarmRunner.create(swarm, 1);
 
-        SwarmException primary = assertThrows(SwarmException.class, () -> runner.run("hi"));
-        assertTrue(primary.getMessage().contains("Max turns"));
+        SwarmErrorException primary = assertThrows(SwarmErrorException.class, () -> runner.run("hi"));
+        assertEquals(SwarmErrorCode.BUDGET_EXCEEDED, primary.code());
         assertEquals(1, primary.getSuppressed().length);
         assertEquals("hook fail", primary.getSuppressed()[0].getMessage());
     }

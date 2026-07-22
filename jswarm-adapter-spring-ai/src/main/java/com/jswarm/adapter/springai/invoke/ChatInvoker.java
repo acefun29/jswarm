@@ -26,7 +26,6 @@ public final class ChatInvoker {
 
     public static ChatResponse invoke(JAgent agent, Prompt prompt, Duration timeout) {
         RunScope scope = RunScope.current();
-        RunScopeChecks.beforeModelCall(scope);
         Duration effectiveTimeout = RunScopeChecks.effectiveModelTimeout(scope, timeout);
         SwarmContext captured = SwarmContext.current();
         try {

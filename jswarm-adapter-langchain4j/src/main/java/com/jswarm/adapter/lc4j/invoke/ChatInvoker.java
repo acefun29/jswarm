@@ -29,7 +29,6 @@ public final class ChatInvoker {
 
     public static AiMessage invoke(JAgent agent, ChatRequest request, Duration timeout) {
         RunScope scope = RunScope.current();
-        RunScopeChecks.beforeModelCall(scope);
         Duration effectiveTimeout = RunScopeChecks.effectiveModelTimeout(scope, timeout);
         SwarmContext context = SwarmContext.current();
         Future<AiMessage> future = CHAT_EXECUTOR.submit(() -> {

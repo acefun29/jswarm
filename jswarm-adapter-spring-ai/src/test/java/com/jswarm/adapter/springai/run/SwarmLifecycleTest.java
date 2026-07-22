@@ -4,6 +4,8 @@ import com.jswarm.adapter.springai.JAgent;
 import com.jswarm.core.Swarm;
 import com.jswarm.core.SwarmContext;
 import com.jswarm.core.SwarmException;
+import com.jswarm.spi.error.SwarmErrorCode;
+import com.jswarm.spi.error.SwarmErrorException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -126,8 +128,8 @@ class SwarmLifecycleTest {
         Swarm swarm = Swarm.create("s").agent(a).entry("a").build();
         SwarmRunner runner = SwarmRunner.create(swarm, 1);
 
-        SwarmException primary = assertThrows(SwarmException.class, () -> runner.run("hi"));
-        assertTrue(primary.getMessage().contains("Max turns"));
+        SwarmErrorException primary = assertThrows(SwarmErrorException.class, () -> runner.run("hi"));
+        assertEquals(SwarmErrorCode.BUDGET_EXCEEDED, primary.code());
         assertEquals(1, primary.getSuppressed().length);
         assertEquals("hook fail", primary.getSuppressed()[0].getMessage());
     }

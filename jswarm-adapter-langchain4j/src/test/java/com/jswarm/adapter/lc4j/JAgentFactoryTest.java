@@ -176,7 +176,7 @@ class JAgentFactoryTest {
         filter.executeDelegate("main", "a", "task", null, SwarmRunOptions.builder().maxTurns(5).build());
 
         assertEquals("status initial", capturedPrompt.get());
-        assertEquals("updated", ctx.get("status"));
+        assertEquals("initial", ctx.get("status"));
     }
 
     static class CtxTools {

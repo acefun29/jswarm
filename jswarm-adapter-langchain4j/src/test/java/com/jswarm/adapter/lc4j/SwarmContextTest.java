@@ -4,6 +4,8 @@ import com.jswarm.adapter.lc4j.run.SwarmRunner;
 import com.jswarm.core.Agent;
 import com.jswarm.core.Swarm;
 import com.jswarm.core.SwarmContext;
+import com.jswarm.spi.error.SwarmErrorCode;
+import com.jswarm.spi.error.SwarmErrorException;
 import com.jswarm.core.SwarmException;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
@@ -179,10 +181,10 @@ class SwarmContextTest {
                 .agent(new TestAgent("plain", "Plain", "plain agent"))
                 .entry("plain")
                 .build();
-        SwarmRunner runner = SwarmRunner.create(swarm);
-        SwarmException ex = assertThrows(SwarmException.class, () ->
-                runner.run("hello"));
-        assertTrue(ex.getMessage().contains("SwarmRunner requires JAgent"));
+        SwarmErrorException ex = assertThrows(SwarmErrorException.class, () ->
+                SwarmRunner.create(swarm));
+        assertEquals(SwarmErrorCode.INVALID_INPUT, ex.code());
+        assertTrue(ex.getMessage().contains("capability"));
     }
 
     private record TestAgent(String id, String name, String description) implements Agent {}

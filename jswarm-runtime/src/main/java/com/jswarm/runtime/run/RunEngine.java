@@ -89,6 +89,20 @@ public final class RunEngine {
         }
     }
 
+    public String delegate(
+            RunScope parentScope,
+            String sourceAgentId,
+            String targetAgentId,
+            String task,
+            boolean streaming) {
+        Objects.requireNonNull(parentScope, "parentScope");
+        RouteAuthorization.authorizeDelegate(swarm, sourceAgentId, targetAgentId);
+        EventDispatcher dispatcher = new EventDispatcher(eventSink);
+        Frame parent = new Frame(
+                parentScope, sourceAgentId, streaming, false, null, dispatcher);
+        return executeDelegate(parent, targetAgentId, task);
+    }
+
     private RunResult loop(Frame frame) {
         transition(frame, RunState.MODEL_CALL);
         while (true) {
@@ -223,7 +237,10 @@ public final class RunEngine {
             result = executeDelegate(frame, delegate.targetAgentId(), delegate.task());
         } catch (RuntimeException failure) {
             if (frame.recoveryAttempts >= frame.scope.policy().maxRecoveryAttempts()) {
-                throw failure;
+                throw SwarmError.of(
+                        SwarmErrorCode.MODEL_FAILURE,
+                        "Recovery attempts exceeded",
+                        failure).toException();
             }
             frame.recoveryAttempts++;
             result = "Jswarm recovery: delegate to '" + delegate.targetAgentId()

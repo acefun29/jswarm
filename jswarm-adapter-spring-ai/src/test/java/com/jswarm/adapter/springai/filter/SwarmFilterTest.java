@@ -7,6 +7,8 @@ import com.jswarm.core.Agent;
 import com.jswarm.core.Swarm;
 import com.jswarm.core.SwarmContext;
 import com.jswarm.core.SwarmException;
+import com.jswarm.spi.error.SwarmErrorCode;
+import com.jswarm.spi.error.SwarmErrorException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -64,9 +66,10 @@ class SwarmFilterTest {
         SwarmContext.set(new SwarmContext());
 
         SwarmFilter filter = new SwarmFilter(swarm);
-        SwarmException ex = assertThrows(SwarmException.class, () ->
+        SwarmErrorException ex = assertThrows(SwarmErrorException.class, () ->
                 filter.executeDelegate("main", "plain", "task", null, SwarmRunOptions.defaults()));
-        assertTrue(ex.getMessage().contains("not a JAgent"));
+        assertEquals(SwarmErrorCode.INVALID_INPUT, ex.code());
+        assertTrue(ex.getMessage().contains("capability"));
     }
 
     @Test
