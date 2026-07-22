@@ -1,5 +1,5 @@
-// 工具调用占位
+// 工具调用请求
 package com.jswarm.spi.lifecycle;
 
-public record ToolInvocation(String toolName, String arguments) {
+public record ToolInvocation(String callId, String toolName, String arguments) {
 }

@@ -10,6 +10,7 @@ public enum SwarmErrorCode {
     CANCELLED(ErrorCategory.CANCEL, false),
     BUDGET_EXCEEDED(ErrorCategory.BUDGET, false),
     PROTOCOL_ERROR(ErrorCategory.PROTOCOL, false),
+    ILLEGAL_STATE(ErrorCategory.INTERNAL, false),
     INTERNAL(ErrorCategory.INTERNAL, false);
 
     private final ErrorCategory category;
