@@ -27,4 +27,10 @@ class CanonicalMessageTest {
         assertThrows(IllegalArgumentException.class,
                 () -> CanonicalMessage.toolResult("", "lookup", "result"));
     }
+
+    @Test
+    void shouldRejectBlankToolSchema() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new ToolDescriptor("lookup", "", " "));
+    }
 }

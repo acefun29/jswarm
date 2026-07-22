@@ -90,6 +90,18 @@ class RunEngineTest {
         assertEquals(1, b.enterCount.get());
         assertEquals(1, b.exitCount.get());
         assertEquals(1, events.stream().filter(e -> e.type() == RunEventType.HANDOFF).count());
+        assertEquals(List.of(
+                        RunEventType.AGENT_ENTERED,
+                        RunEventType.AGENT_EXITED,
+                        RunEventType.HANDOFF,
+                        RunEventType.AGENT_ENTERED,
+                        RunEventType.AGENT_EXITED),
+                events.stream()
+                        .map(RunEvent::type)
+                        .filter(type -> type == RunEventType.AGENT_ENTERED
+                                || type == RunEventType.AGENT_EXITED
+                                || type == RunEventType.HANDOFF)
+                        .toList());
     }
 
     @Test
@@ -124,6 +136,20 @@ class RunEngineTest {
         assertEquals(1, childEvents.stream().map(RunEvent::runId).distinct().count());
         assertTrue(childEvents.stream().allMatch(e ->
                 e.parentRunId().asOptional().orElseThrow().equals(started.runId().value())));
+        assertEquals(List.of(
+                        RunEventType.AGENT_ENTERED,
+                        RunEventType.DELEGATE_STARTED,
+                        RunEventType.AGENT_ENTERED,
+                        RunEventType.AGENT_EXITED,
+                        RunEventType.DELEGATE_COMPLETED,
+                        RunEventType.AGENT_EXITED),
+                events.stream()
+                        .map(RunEvent::type)
+                        .filter(type -> type == RunEventType.AGENT_ENTERED
+                                || type == RunEventType.AGENT_EXITED
+                                || type == RunEventType.DELEGATE_STARTED
+                                || type == RunEventType.DELEGATE_COMPLETED)
+                        .toList());
     }
 
     @Test
@@ -165,6 +191,68 @@ class RunEngineTest {
     }
 
     @Test
+    void onEnterFailureShouldNotInvokeExitAndShouldFailOnce() {
+        RecordingAgent a = new RecordingAgent("a", "system-a");
+        a.failEnter = true;
+        FakeRuntimeProvider provider = new FakeRuntimeProvider()
+                .agent("a", CanonicalMessage.assistant("unused"));
+        List<RunEvent> events = new ArrayList<>();
+        Swarm swarm = Swarm.create("s").agent(a).entry("a").build();
+
+        assertThrows(IllegalStateException.class, () -> execute(
+                RunEngine.create(swarm, provider, events::add), RunInput.fresh("hi", "a"),
+                scope("a", ContextSnapshot.empty(), RunBudget.defaults())));
+
+        assertEquals(1, a.enterCount.get());
+        assertEquals(0, a.exitCount.get());
+        assertEquals(1, events.stream().filter(e -> e.type() == RunEventType.FAILED).count());
+    }
+
+    @Test
+    void delegateEnterFailureShouldRecoverWithoutDelegateExit() {
+        RecordingAgent a = new RecordingAgent("a", "system-a");
+        RecordingAgent b = new RecordingAgent("b", "system-b");
+        b.failDelegateEnter = true;
+        FakeRuntimeProvider provider = new FakeRuntimeProvider()
+                .agent("a",
+                        CanonicalMessage.assistant("", List.of(route("d1", "delegate",
+                                Map.of("target", "b", "task", "inspect")))),
+                        CanonicalMessage.assistant("recovered"))
+                .agent("b", CanonicalMessage.assistant("unused"));
+        Swarm swarm = Swarm.create("s").agent(a).agent(b).entry("a").delegate("a", "b").build();
+
+        RunResult result = execute(RunEngine.create(swarm, provider), RunInput.fresh("hi", "a"),
+                scope("a", ContextSnapshot.empty(), RunBudget.defaults()));
+
+        assertEquals("recovered", result.reply());
+        assertEquals(1, b.delegateEnterCount.get());
+        assertEquals(0, b.delegateExitCount.get());
+        assertEquals(1, a.exitCount.get());
+    }
+
+    @Test
+    void delegateExitFailureShouldOnlyInvokeDelegateExitOnce() {
+        RecordingAgent a = new RecordingAgent("a", "system-a");
+        RecordingAgent b = new RecordingAgent("b", "system-b");
+        b.failDelegateExit = true;
+        FakeRuntimeProvider provider = new FakeRuntimeProvider()
+                .agent("a",
+                        CanonicalMessage.assistant("", List.of(route("d1", "delegate",
+                                Map.of("target", "b", "task", "inspect")))),
+                        CanonicalMessage.assistant("recovered"))
+                .agent("b", CanonicalMessage.assistant("child-result"));
+        Swarm swarm = Swarm.create("s").agent(a).agent(b).entry("a").delegate("a", "b").build();
+
+        RunResult result = execute(RunEngine.create(swarm, provider), RunInput.fresh("hi", "a"),
+                scope("a", ContextSnapshot.empty(), RunBudget.defaults()));
+
+        assertEquals("recovered", result.reply());
+        assertEquals(1, b.delegateEnterCount.get());
+        assertEquals(1, b.delegateExitCount.get());
+        assertEquals(1, a.exitCount.get());
+    }
+
+    @Test
     void shouldEmitCancelledTerminal() {
         RecordingAgent a = new RecordingAgent("a", "system-a");
         FakeRuntimeProvider provider = new FakeRuntimeProvider()
@@ -179,6 +267,8 @@ class RunEngineTest {
                         RunInput.fresh("hi", "a"), scope));
 
         assertEquals(SwarmErrorCode.CANCELLED, error.code());
+        assertEquals(1, a.enterCount.get());
+        assertEquals(1, a.exitCount.get());
         assertEquals(1, events.stream().filter(e -> e.type() == RunEventType.CANCELLED).count());
         assertEquals(0, events.stream().filter(e -> e.type() == RunEventType.FAILED).count());
     }
@@ -222,6 +312,20 @@ class RunEngineTest {
         assertEquals(SwarmErrorCode.INVALID_INPUT, error.code());
     }
 
+    @Test
+    void shouldRejectUnknownStartAgentWithTypedError() {
+        RecordingAgent a = new RecordingAgent("a", "system-a");
+        FakeRuntimeProvider provider = new FakeRuntimeProvider()
+                .agent("a", CanonicalMessage.assistant("unused"));
+        RunEngine engine = RunEngine.create(Swarm.create("s").agent(a).entry("a").build(), provider);
+
+        SwarmErrorException error = assertThrows(SwarmErrorException.class,
+                () -> execute(engine, RunInput.fresh("hi", "missing"),
+                        scope("a", ContextSnapshot.empty(), RunBudget.defaults())));
+
+        assertEquals(SwarmErrorCode.INVALID_INPUT, error.code());
+    }
+
     private static RunResult execute(RunEngine engine, RunInput input, RunScope scope) {
         SwarmContextBridge.ScopeBinding binding = SwarmContextBridge.bind(scope);
         try {
@@ -252,7 +356,10 @@ class RunEngineTest {
         private final AtomicInteger exitCount = new AtomicInteger();
         private final AtomicInteger delegateEnterCount = new AtomicInteger();
         private final AtomicInteger delegateExitCount = new AtomicInteger();
+        private boolean failEnter;
         private boolean failExit;
+        private boolean failDelegateEnter;
+        private boolean failDelegateExit;
 
         private RecordingAgent(String id, String instructions) {
             this.id = id;
@@ -282,6 +389,9 @@ class RunEngineTest {
         @Override
         public void onEnter(SwarmContext context) {
             enterCount.incrementAndGet();
+            if (failEnter) {
+                throw new IllegalStateException("enter failed");
+            }
         }
 
         @Override
@@ -295,11 +405,17 @@ class RunEngineTest {
         @Override
         public void onDelegateEnter(SwarmContext context, String task) {
             delegateEnterCount.incrementAndGet();
+            if (failDelegateEnter) {
+                throw new IllegalStateException("delegate enter failed");
+            }
         }
 
         @Override
         public void onDelegateExit(SwarmContext context, String task, String result) {
             delegateExitCount.incrementAndGet();
+            if (failDelegateExit) {
+                throw new IllegalStateException("delegate exit failed");
+            }
         }
     }
 

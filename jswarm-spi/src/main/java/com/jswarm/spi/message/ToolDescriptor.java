@@ -9,5 +9,8 @@ public record ToolDescriptor(String name, String description, String inputSchema
         }
         description = description != null ? description : "";
         inputSchema = inputSchema != null ? inputSchema : "{\"type\":\"object\"}";
+        if (inputSchema.isBlank()) {
+            throw new IllegalArgumentException("tool input schema must not be blank");
+        }
     }
 }
