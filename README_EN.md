@@ -38,7 +38,7 @@ Jswarm handles the **orchestration layer** for multi-agent systems — agent top
 
 **Canonical repository:** [github.com/acefun29/jswarm](https://github.com/acefun29/jswarm) · Channel [JitPack](https://jitpack.io/#acefun29/jswarm)
 
-**Maven coordinates (JitPack):** `com.github.acefun29.jswarm:<module>:1.0.0`
+**Maven coordinates (JitPack):** `com.github.acefun29.jswarm:<module>:1.0.1`
 
 ```xml
 <repositories>
@@ -50,7 +50,7 @@ Jswarm handles the **orchestration layer** for multi-agent systems — agent top
 <dependency>
   <groupId>com.github.acefun29.jswarm</groupId>
   <artifactId>jswarm-core</artifactId>
-  <version>1.0.0</version>
+  <version>1.0.1</version>
 </dependency>
 ```
 

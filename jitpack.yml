@@ -1,4 +1,5 @@
 jdk:
   - openjdk17
 install:
+  - chmod +x mvnw
   - ./mvnw -B -DskipTests -pl '!jswarm-examples,!jswarm-examples-spring-ai' -am install
