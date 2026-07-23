@@ -41,9 +41,9 @@ doc/
 compliance-swarm/
 jswarm-smart-oa/
 
-# 本地工具脚本（勿提交）
-scripts/git-commit.ps1
-scripts/git-commit.cmd
+# 本地发布暂存（勿提交）
+release-assets/
+
 
 
 # 环境变量与密钥（若误建）
