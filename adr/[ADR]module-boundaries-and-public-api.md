@@ -9,10 +9,10 @@
 
 | 项 | 值 |
 |----|-----|
-| Canonical repository | https://github.com/acefun29/Jswarm |
-| groupId | `com.jswarm` |
-| 当前版本 | `1.0.0-SNAPSHOT` |
-| 发布渠道 | 计划-08 再定（Central 等） |
+| Canonical repository | https://github.com/acefun29/jswarm |
+| groupId | `com.github.acefun29.jswarm`（Java 包名仍为 `com.jswarm.*`） |
+| 当前版本 | `1.0.0` |
+| 发布渠道 | **JitPack**；本阶段不做 Central / GPG / Packages |
 
 ## 模块边界
 

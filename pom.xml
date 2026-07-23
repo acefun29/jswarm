@@ -4,17 +4,43 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.jswarm</groupId>
+    <groupId>com.github.acefun29.jswarm</groupId>
     <artifactId>jswarm-parent</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>${revision}</version>
     <packaging>pom</packaging>
 
     <name>Jswarm Parent</name>
     <description>基于第一性原理构建的极致轻量级 Java 多 Agent 协同 (Swarm) 编排框架</description>
+    <url>https://github.com/acefun29/jswarm</url>
+
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>https://opensource.org/licenses/MIT</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <id>acefun29</id>
+            <name>Jswarm Contributors</name>
+            <url>https://github.com/acefun29/jswarm</url>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:https://github.com/acefun29/jswarm.git</connection>
+        <developerConnection>scm:git:https://github.com/acefun29/jswarm.git</developerConnection>
+        <url>https://github.com/acefun29/jswarm</url>
+        <tag>HEAD</tag>
+    </scm>
 
     <properties>
+        <revision>1.0.0</revision>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <project.build.outputTimestamp>2026-07-23T00:00:00Z</project.build.outputTimestamp>
         <java.version>17</java.version>
         <maven.compiler.release>${java.version}</maven.compiler.release>
         <junit.version>5.10.2</junit.version>
@@ -22,6 +48,7 @@
         <spring-ai.version>2.0.0</spring-ai.version>
         <spring-boot.version>4.0.7</spring-boot.version>
         <mockito.version>5.12.0</mockito.version>
+        <flatten.version>1.6.0</flatten.version>
     </properties>
 
     <modules>
@@ -100,6 +127,31 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.3</version>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>flatten-maven-plugin</artifactId>
+                <version>${flatten.version}</version>
+                <configuration>
+                    <flattenMode>oss</flattenMode>
+                    <updatePomFile>true</updatePomFile>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>flatten</id>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>flatten</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>flatten-clean</id>
+                        <phase>clean</phase>
+                        <goals>
+                            <goal>clean</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

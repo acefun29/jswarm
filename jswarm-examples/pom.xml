@@ -5,9 +5,9 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.jswarm</groupId>
+        <groupId>com.github.acefun29.jswarm</groupId>
         <artifactId>jswarm-parent</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>${revision}</version>
     </parent>
 
     <artifactId>jswarm-examples</artifactId>
@@ -16,7 +16,7 @@
 
     <dependencies>
         <dependency>
-            <groupId>com.jswarm</groupId>
+            <groupId>com.github.acefun29.jswarm</groupId>
             <artifactId>jswarm-adapter-langchain4j</artifactId>
             <version>${project.version}</version>
         </dependency>

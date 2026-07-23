@@ -5,6 +5,8 @@ target/
 *.war
 *.nar
 *.ear
+!.mvn/wrapper/maven-wrapper.jar
+.flattened-pom.xml
 hs_err_pid*
 replay_pid*
 
@@ -39,10 +41,10 @@ doc/
 compliance-swarm/
 jswarm-smart-oa/
 
-# AI / 编辑器本地配置
-.claude/
-.cursor/
-*.local.json
+# 本地工具脚本（勿提交）
+scripts/git-commit.ps1
+scripts/git-commit.cmd
+
 
 # 环境变量与密钥（若误建）
 .env

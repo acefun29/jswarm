@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Scan forbidden Maven coordinates
+        run: |
+          set -euo pipefail
+          if grep -R --include='pom.xml' -n '<groupId>com.jswarm</groupId>' .; then
+            echo 'Forbidden groupId com.jswarm found in pom.xml'
+            exit 1
+          fi
+          if grep -R --include='*.md' --include='*.xml' --include='*.yml' --include='*.yaml' -nE 'acefun29\.Jswarm|acefun29/Jswarm' .; then
+            echo 'Forbidden uppercase Jswarm path/coordinate found'
+            exit 1
+          fi
+
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify
+        run: ./mvnw -B verify

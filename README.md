@@ -6,6 +6,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" /></a>
+  <a href="https://jitpack.io/#acefun29/jswarm"><img src="https://jitpack.io/v/acefun29/jswarm.svg" alt="JitPack" /></a>
   <img src="https://img.shields.io/badge/JDK-17%2B-orange.svg" alt="JDK 17+" />
   <img src="https://img.shields.io/badge/LangChain4j-1.15.1-green.svg" alt="LangChain4j" />
   <img src="https://img.shields.io/badge/Spring_AI-2.0.0-blue.svg" alt="Spring AI" />
@@ -35,9 +36,25 @@ Jswarm 专注于多 Agent 场景下的**编排层**——定义 Agent 拓扑、�
 
 **环境要求：** JDK 17+（编译 `release=17`）· Maven 3.8+ · LangChain4j **1.15.1** 或 Spring AI **2.0.0** + Spring Boot **4.0.7**
 
-**正式仓库：** [github.com/acefun29/Jswarm](https://github.com/acefun29/Jswarm) · Maven 坐标 `com.jswarm:*:1.0.0-SNAPSHOT`
+**正式仓库：** [github.com/acefun29/jswarm](https://github.com/acefun29/jswarm) · 发布渠道 [JitPack](https://jitpack.io/#acefun29/jswarm)
 
-兼容矩阵与模块边界见 `adr/`。不支持：Spring AI 2.0 + Boot 3.x。
+**Maven 坐标（JitPack）：** `com.github.acefun29.jswarm:<module>:1.0.0`
+
+```xml
+<repositories>
+  <repository>
+    <id>jitpack.io</id>
+    <url>https://jitpack.io</url>
+  </repository>
+</repositories>
+<dependency>
+  <groupId>com.github.acefun29.jswarm</groupId>
+  <artifactId>jswarm-core</artifactId>
+  <version>1.0.0</version>
+</dependency>
+```
+
+兼容矩阵与模块边界见 `adr/`。不支持：Spring AI 2.0 + Boot 3.x。Java 包名仍为 `com.jswarm.*`。
 
 ---
 
@@ -111,8 +128,8 @@ jswarm-examples-spring-ai 基于 Spring AI 的 Showcase Web 演示
 ### 1. 构建
 
 ```bash
-git clone https://github.com/acefun29/Jswarm.git
-cd Jswarm
+git clone https://github.com/acefun29/jswarm.git
+cd jswarm
 mvn install -DskipTests
 ```
 

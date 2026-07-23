@@ -6,6 +6,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" /></a>
+  <a href="https://jitpack.io/#acefun29/jswarm"><img src="https://jitpack.io/v/acefun29/jswarm.svg" alt="JitPack" /></a>
   <img src="https://img.shields.io/badge/JDK-17%2B-orange.svg" alt="JDK 17+" />
   <img src="https://img.shields.io/badge/LangChain4j-1.15.1-green.svg" alt="LangChain4j" />
   <img src="https://img.shields.io/badge/Spring_AI-2.0.0-blue.svg" alt="Spring AI" />
@@ -35,9 +36,25 @@ Jswarm handles the **orchestration layer** for multi-agent systems — agent top
 
 **Requirements:** JDK 17+ (compile `release=17`) · Maven 3.8+ · LangChain4j **1.15.1** or Spring AI **2.0.0** + Spring Boot **4.0.7**
 
-**Canonical repository:** [github.com/acefun29/Jswarm](https://github.com/acefun29/Jswarm) · Maven coordinates `com.jswarm:*:1.0.0-SNAPSHOT`
+**Canonical repository:** [github.com/acefun29/jswarm](https://github.com/acefun29/jswarm) · Channel [JitPack](https://jitpack.io/#acefun29/jswarm)
 
-See `adr/` for the compatibility matrix and module boundaries. Unsupported: Spring AI 2.0 + Boot 3.x.
+**Maven coordinates (JitPack):** `com.github.acefun29.jswarm:<module>:1.0.0`
+
+```xml
+<repositories>
+  <repository>
+    <id>jitpack.io</id>
+    <url>https://jitpack.io</url>
+  </repository>
+</repositories>
+<dependency>
+  <groupId>com.github.acefun29.jswarm</groupId>
+  <artifactId>jswarm-core</artifactId>
+  <version>1.0.0</version>
+</dependency>
+```
+
+See `adr/` for the compatibility matrix and module boundaries. Unsupported: Spring AI 2.0 + Boot 3.x. Java packages remain `com.jswarm.*`.
 
 ---
 
@@ -111,8 +128,8 @@ jswarm-examples-spring-ai Showcase web demo (Spring AI)
 ### 1. Build
 
 ```bash
-git clone https://github.com/acefun29/Jswarm.git
-cd Jswarm
+git clone https://github.com/acefun29/jswarm.git
+cd jswarm
 mvn install -DskipTests
 ```
 
